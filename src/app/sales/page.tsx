@@ -15,6 +15,8 @@ import {
 import { getProducts, getLocations } from '@/lib/inventory';
 import { generateFacturaForSale, downloadFacturaXml, sendSaleToSri } from '@/lib/sri-factura-db';
 import { emitNotaCreditoForSale, emitNotaDebitoForSale, emitGuiaRemisionForSale, downloadXmlFile } from '@/lib/sri-docs-db';
+import QuickCreatePartnerModal from '@/components/modals/QuickCreatePartnerModal';
+import QuickCreateProductModal from '@/components/modals/QuickCreateProductModal';
 
 const RidePdfButton = dynamic(() => import('@/components/RidePdfButton'), { ssr: false });
 
@@ -86,6 +88,10 @@ export default function SalesPage() {
   const [observation, setObservation] = useState('');
   const [reference, setReference] = useState('');
   const [lines, setLines] = useState<SaleLine[]>([emptyLine()]);
+
+  // Modal states
+  const [showPartnerModal, setShowPartnerModal] = useState(false);
+  const [showProductModalForLine, setShowProductModalForLine] = useState<number | null>(null);
 
   const isEditable = docState === 'draft' || !currentId;
 
@@ -458,8 +464,12 @@ export default function SalesPage() {
             </div>
             <div style={{ gridColumn: 'span 2' }}>
               <label style={C.label}>Cliente *</label>
-              <select style={isEditable ? C.select : C.inputRO} value={partnerId} onChange={e => setPartnerId(Number(e.target.value))} disabled={!isEditable}>
+              <select style={isEditable ? C.select : C.inputRO} value={partnerId} onChange={e => {
+                if (e.target.value === 'CREATE_NEW') setShowPartnerModal(true);
+                else setPartnerId(Number(e.target.value));
+              }} disabled={!isEditable}>
                 <option value={0}>-- Seleccionar --</option>
+                {isEditable && <option value="CREATE_NEW">+ Crear Nuevo Cliente...</option>}
                 {partners.map(p => <option key={p.id} value={p.id}>{p.name} {p.vat ? '(' + p.vat + ')' : ''}</option>)}
               </select>
             </div>
@@ -547,8 +557,12 @@ export default function SalesPage() {
                       <td style={{ ...C.td, fontFamily: 'monospace', fontSize: '11px' }}>{prodCode || '-'}</td>
                       <td style={C.td}>
                         {isEditable ? (
-                          <select style={{ ...C.tdInput, textAlign: 'left' }} value={l.product_id} onChange={e => updLine(i, 'product_id', Number(e.target.value))}>
+                          <select style={{ ...C.tdInput, textAlign: 'left' }} value={l.product_id} onChange={e => {
+                            if (e.target.value === 'CREATE_NEW') setShowProductModalForLine(i);
+                            else updLine(i, 'product_id', Number(e.target.value));
+                          }}>
                             <option value={0}>-- Producto --</option>
+                            <option value="CREATE_NEW">+ Crear Nuevo Producto...</option>
                             {products.map((p: any) => <option key={p.id} value={p.id}>{p.code ? '[' + p.code + '] ' : ''}{p.name}{p.list_price > 0 ? ' ($' + Number(p.list_price).toFixed(2) + ')' : ''}</option>)}
                           </select>
                         ) : (
@@ -711,6 +725,32 @@ export default function SalesPage() {
           )}
         </div>
       </div>
+
+      {showPartnerModal && (
+        <QuickCreatePartnerModal
+          companyId={1}
+          defaultIsCustomer={true}
+          defaultIsSupplier={false}
+          onSaved={async (newId) => {
+            setShowPartnerModal(false);
+            await loadAll();
+            setPartnerId(newId);
+          }}
+          onCancel={() => setShowPartnerModal(false)}
+        />
+      )}
+
+      {showProductModalForLine !== null && (
+        <QuickCreateProductModal
+          onSaved={async (newId) => {
+            const lineIndex = showProductModalForLine;
+            setShowProductModalForLine(null);
+            await loadAll();
+            updLine(lineIndex, 'product_id', newId);
+          }}
+          onCancel={() => setShowProductModalForLine(null)}
+        />
+      )}
     </div>
   );
 }

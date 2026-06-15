@@ -47,6 +47,8 @@ export interface Partner {
   is_company: boolean;
   company_name?: string;
   company_type: 'person' | 'company';
+  is_customer?: boolean;
+  is_supplier?: boolean;
   active: boolean;
   type: 'contact' | 'invoice' | 'delivery' | 'other';
   lang?: string;
@@ -179,6 +181,8 @@ export interface PartnerFormData {
   city?: string;
   zip?: string;
   street?: string;
+  is_customer: boolean;
+  is_supplier: boolean;
 }
 
 export interface ProductFormData {

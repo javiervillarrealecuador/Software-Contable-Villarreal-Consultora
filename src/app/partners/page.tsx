@@ -25,6 +25,8 @@ export default function PartnersPage() {
     country_id: undefined,
     state_id: undefined,
     city: '',
+    is_customer: true,
+    is_supplier: false,
   });
 
   useEffect(() => {
@@ -89,6 +91,8 @@ export default function PartnersPage() {
         country_id: undefined,
         state_id: undefined,
         city: '',
+        is_customer: true,
+        is_supplier: false,
       });
       loadPartners();
     } catch (error) {
@@ -108,6 +112,8 @@ export default function PartnersPage() {
       country_id: partner.country_id,
       state_id: partner.state_id,
       city: partner.city,
+      is_customer: partner.is_customer ?? true,
+      is_supplier: partner.is_supplier ?? false,
     });
     setIsModalOpen(true);
   }
@@ -124,6 +130,8 @@ export default function PartnersPage() {
       country_id: undefined,
       state_id: undefined,
       city: '',
+      is_customer: true,
+      is_supplier: false,
     });
   }
 
@@ -202,13 +210,25 @@ export default function PartnersPage() {
                     <tr key={partner.id}>
                       <td className="font-semibold">{partner.name}</td>
                       <td>
-                        <span className={`px-md py-sm rounded-full text-xs font-semibold ${
-                          partner.is_company
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {partner.is_company ? 'Empresa' : 'Persona'}
-                        </span>
+                        <div className="flex gap-1 flex-wrap">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            partner.is_company
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {partner.is_company ? 'Empresa' : 'Persona'}
+                          </span>
+                          {partner.is_customer && (
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                              Cliente
+                            </span>
+                          )}
+                          {partner.is_supplier && (
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                              Proveedor
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="font-mono text-sm">{partner.vat || '-'}</td>
                       <td>{partner.email || '-'}</td>
@@ -298,6 +318,25 @@ export default function PartnersPage() {
                       onChange={(e) => setFormData({ ...formData, is_company: e.target.checked })}
                     />
                     <span className="text-sm font-semibold">¿Es una empresa?</span>
+                  </label>
+                </div>
+                
+                <div className="flex gap-md mt-lg">
+                  <label className="flex items-center gap-sm cursor-pointer bg-slate-50 px-3 py-2 rounded border border-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_customer}
+                      onChange={(e) => setFormData({ ...formData, is_customer: e.target.checked })}
+                    />
+                    <span className="text-sm font-semibold">Es Cliente</span>
+                  </label>
+                  <label className="flex items-center gap-sm cursor-pointer bg-slate-50 px-3 py-2 rounded border border-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_supplier}
+                      onChange={(e) => setFormData({ ...formData, is_supplier: e.target.checked })}
+                    />
+                    <span className="text-sm font-semibold">Es Proveedor</span>
                   </label>
                 </div>
               </div>
