@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\\\\src\\\\app\\\\purchases\")",
+      "Bash(Out-Null)",
+      "Bash(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\\\\src\\\\app\\\\inventory\")",
+      "Bash(Write-Host \"Directories created\")",
+      "PowerShell(cd \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\"; $job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\"; npm run build 2>&1 }; Wait-Job $job -Timeout 120 | Out-Null; Receive-Job $job)",
+      "PowerShell(cd \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\"; $job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\"; npm run build 2>&1 }; Wait-Job $job -Timeout 150 | Out-Null; Receive-Job $job)",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\"; npm run build 2>&1 }; Wait-Job $job -Timeout 150 | Out-Null; Receive-Job $job)",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\"; npx tsc --noEmit 2>&1 }; Wait-Job $job -Timeout 120 | Out-Null; Receive-Job $job)",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\"; npm run dev 2>&1 }; Start-Sleep -Seconds 18; $output = Receive-Job $job; Stop-Job $job; Remove-Job $job; $output)",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\"; npm run dev 2>&1 | Select-Object -First 30 }; Start-Sleep -Seconds 15; Receive-Job $job; Stop-Job $job -ErrorAction SilentlyContinue; Remove-Job $job -ErrorAction SilentlyContinue)",
+      "Read(//c/Users/LENOVO/AppData/Local/Temp/claude/c--Users-LENOVO-OneDrive---Universidad-Polit-cnica-Estatal-del-Carchi-PUBLICA-BACK-EMPRESAS-CLASES-4--MARKETING-DIGITAL-CURSO-LABORA-IA-SOFTWARE CONTABLE-VC-erp-ecuador/5a3cdeea-2262-4a6c-af7f-71801b894790/tasks/**)",
+      "PowerShell(Set-Location \"c:\\\\Users\\\\LENOVO\\\\OneDrive - Universidad Politécnica Estatal del Carchi\\\\PUBLICA\\\\BACK EMPRESAS\\\\CLASES\\\\4. MARKETING DIGITAL\\\\CURSO LABORA IA\\\\SOFTWARE CONTABLE VC\\\\erp-ecuador\"; $proc = Start-Process -FilePath \"cmd.exe\" -ArgumentList \"/c npm run dev > C:\\\\Temp\\\\erp_dev.txt 2>&1\" -PassThru -NoNewWindow; Start-Sleep -Seconds 14; Get-Content C:\\\\Temp\\\\erp_dev.txt -ErrorAction SilentlyContinue; Stop-Process -Id $proc.Id -ErrorAction SilentlyContinue)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\LENOVO\\OneDrive - Universidad Polit�cnica Estatal del Carchi\\PUBLICA\\BACK EMPRESAS\\CLASES\\4. MARKETING DIGITAL\\CURSO LABORA IA\\SOFTWARE CONTABLE VC\\erp-ecuador"
+    ]
+  }
+}

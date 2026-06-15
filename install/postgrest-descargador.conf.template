@@ -1,0 +1,28 @@
+# postgrest-descargador.conf — PostgREST para el SRI Descargador local
+#
+# PASOS PARA CONFIGURAR:
+#   1. Copia este archivo como "postgrest-descargador.conf" (misma carpeta)
+#   2. Reemplaza CAMBIA_ESTA_PASSWORD por la contraseña del usuario "authenticator"
+#      (la que ingresaste en schema-roles.sql)
+#   3. Reemplaza PEGA_EL_JWT_SECRET por el JWT_SECRET que generó generate-keys.js
+
+# ── Conexión a PostgreSQL ─────────────────────────────────────────────────────
+# Base de datos EXCLUSIVA del descargador (no es la misma que el ERP)
+db-uri = "postgres://authenticator:CAMBIA_ESTA_PASSWORD@localhost:5432/sri_descargador"
+
+db-schema    = "public"
+db-anon-role = "anon"
+
+# ── JWT (generado con generate-keys.js) ──────────────────────────────────────
+jwt-secret = "PEGA_EL_JWT_SECRET"
+
+# ── Servidor ──────────────────────────────────────────────────────────────────
+server-port = 3101
+# SEGURIDAD: "127.0.0.1" = solo localhost, invisible desde la red y desde VPN.
+# NO usar "!4" ni "*" porque eso expone PostgREST a toda la red.
+server-host = "127.0.0.1"
+
+# ── Performance ───────────────────────────────────────────────────────────────
+db-pool         = 5
+db-pool-timeout = 10
+max-rows        = 5000

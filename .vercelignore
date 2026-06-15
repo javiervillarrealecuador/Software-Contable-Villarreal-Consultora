@@ -1,0 +1,8 @@
+NIGISU/
+node_modules/
+supabase/.temp/
+.git/
+scripts/
+xmls-sri/
+.next/
+install/

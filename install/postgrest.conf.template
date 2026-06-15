@@ -1,0 +1,38 @@
+# postgrest.conf — Configuración de PostgREST para ERP Ecuador local
+#
+# INSTRUCCIONES:
+#   1. Copia este archivo como postgrest.conf (en la misma carpeta)
+#   2. Rellena JWT_SECRET con el valor que generó generate-keys.js
+#   3. Rellena la contraseña del usuario authenticator (la que creaste en PostgreSQL)
+#
+# DOCUMENTACIÓN: https://postgrest.org/en/stable/configuration.html
+
+# ── Conexión a PostgreSQL ─────────────────────────────────────────────────────
+# Formato: postgres://usuario:contraseña@host:puerto/basededatos
+# El usuario "authenticator" es el que creaste en schema-roles.sql
+db-uri = "postgres://authenticator:CAMBIA_ESTA_PASSWORD@localhost:5432/erp_ecuador"
+
+# Schema principal donde viven las tablas del ERP
+db-schema = "public"
+
+# Rol con el que se ejecutan las peticiones sin token (o con token anon)
+db-anon-role = "anon"
+
+# ── Seguridad ─────────────────────────────────────────────────────────────────
+# Pega aquí el JWT_SECRET que generó generate-keys.js
+jwt-secret = "PEGA_AQUI_EL_JWT_SECRET_DE_64_CARACTERES"
+
+# ── Servidor ──────────────────────────────────────────────────────────────────
+# PostgREST escucha en :3101; el proxy-pgrst lo expone en :3100
+server-port = 3101
+
+# Solo acepta conexiones locales (el proxy es quien se expone)
+server-host = "!4"
+
+# Pool de conexiones a PostgreSQL
+db-pool = 10
+db-pool-timeout = 10
+
+# ── Performance ───────────────────────────────────────────────────────────────
+# Limitar tamaño de respuesta para evitar consultas accidentales enormes
+max-rows = 10000

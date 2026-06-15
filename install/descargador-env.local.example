@@ -1,0 +1,30 @@
+# .env.local — SRI Descargador con base de datos LOCAL
+#
+# COPIA este archivo como C:\sri-descargador\.env.local
+# y rellena los valores.
+#
+# IMPORTANTE: Ya NO uses las credenciales de Supabase aquí.
+# Esta app apunta a la base de datos PostgreSQL local del servidor.
+
+# ── Base de datos LOCAL (PostgREST en el mismo servidor) ─────────────────────
+# La URL apunta al proxy local que adapta supabase-js a PostgREST.
+# "localhost" porque PostgREST corre en el mismo servidor que el descargador.
+NEXT_PUBLIC_SUPABASE_URL=http://localhost:3100
+
+# Claves generadas con: node C:\erp-ecuador\install\generate-keys.js
+# (usa generate-keys.js del mismo servidor, no las claves del ERP)
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...  ← pega ANON_KEY de generate-keys.js
+SUPABASE_SERVICE_ROLE_KEY=eyJ...      ← pega SERVICE_ROLE_KEY de generate-keys.js
+
+# ── Chrome para Puppeteer ─────────────────────────────────────────────────────
+CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
+
+# ── Comportamiento ────────────────────────────────────────────────────────────
+SRI_HEADLESS=true
+
+# ── Seguridad del scheduler ───────────────────────────────────────────────────
+# Genera una con: node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
+SCHEDULER_SECRET=cambia_esto_por_una_clave_aleatoria
+
+# ── Puerto ────────────────────────────────────────────────────────────────────
+PORT=3001
