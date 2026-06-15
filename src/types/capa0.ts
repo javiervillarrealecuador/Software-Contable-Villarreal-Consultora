@@ -53,6 +53,45 @@ export interface Partner {
   type: 'contact' | 'invoice' | 'delivery' | 'other';
   lang?: string;
   tz?: string;
+
+  // Campos Avanzados (SRI / Detalles)
+  identification_type?: string;
+  title?: string;
+  trade_name?: string;
+  alias?: string;
+  street_number?: string;
+  cross_street?: string;
+  fax?: string;
+  contact_preference?: string;
+  job_title?: string;
+  legal_representative?: string;
+
+  is_collector?: boolean;
+  is_salesperson?: boolean;
+  is_employee?: boolean;
+  is_agent?: boolean;
+  is_insurance_company?: boolean;
+  is_partner_shareholder?: boolean;
+  is_student?: boolean;
+  is_exporter?: boolean;
+  is_importer?: boolean;
+  is_carrier?: boolean;
+
+  comment?: string;
+  is_large_taxpayer?: boolean;
+  is_special_taxpayer?: boolean;
+  is_withholding_agent?: boolean;
+  rimpe_type?: string;
+
+  credit_days?: number;
+  zone?: string;
+  product_line?: string;
+
+  bank_name?: string;
+  bank_account_type?: string;
+  bank_account_number?: string;
+  bank_account_id_number?: string;
+
   created_at: string;
   updated_at: string;
   created_uid?: number;
@@ -183,6 +222,44 @@ export interface PartnerFormData {
   street?: string;
   is_customer: boolean;
   is_supplier: boolean;
+
+  // Campos Avanzados
+  identification_type?: string;
+  title?: string;
+  trade_name?: string;
+  alias?: string;
+  street_number?: string;
+  cross_street?: string;
+  fax?: string;
+  contact_preference?: string;
+  job_title?: string;
+  legal_representative?: string;
+
+  is_collector: boolean;
+  is_salesperson: boolean;
+  is_employee: boolean;
+  is_agent: boolean;
+  is_insurance_company: boolean;
+  is_partner_shareholder: boolean;
+  is_student: boolean;
+  is_exporter: boolean;
+  is_importer: boolean;
+  is_carrier: boolean;
+
+  comment?: string;
+  is_large_taxpayer: boolean;
+  is_special_taxpayer: boolean;
+  is_withholding_agent: boolean;
+  rimpe_type?: string;
+
+  credit_days: number;
+  zone?: string;
+  product_line?: string;
+
+  bank_name?: string;
+  bank_account_type?: string;
+  bank_account_number?: string;
+  bank_account_id_number?: string;
 }
 
 export interface ProductFormData {
