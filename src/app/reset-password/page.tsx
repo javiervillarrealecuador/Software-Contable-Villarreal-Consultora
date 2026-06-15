@@ -1,64 +1,56 @@
-import { login } from './actions'
-import Link from 'next/link'
+import { updatePassword } from '@/app/forgot-password/actions'
 
-export default function LoginPage({
+export default function ResetPasswordPage({
   searchParams,
 }: {
-  searchParams: { error?: string; success?: string }
+  searchParams: { error?: string }
 }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-xl shadow-md border border-gray-100">
         <div>
           <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-            ERP Ecuador
+            Nueva Contraseña
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Ingresa a tu cuenta para continuar
+            Establece tu nueva contraseña de acceso.
           </p>
         </div>
         
         {searchParams?.error && (
           <div className="bg-red-50 text-red-500 p-3 rounded-md text-sm text-center">
-            Credenciales incorrectas o ha ocurrido un error.
+            {searchParams.error}
           </div>
         )}
 
-        {searchParams?.success && (
-          <div className="bg-green-50 text-green-600 p-3 rounded-md text-sm text-center font-medium">
-            {searchParams.success}
-          </div>
-        )}
-
-        <form className="mt-8 space-y-6" action={login}>
-          <input type="hidden" name="remember" defaultValue="true" />
+        <form className="mt-8 space-y-6" action={updatePassword}>
           <div className="-space-y-px rounded-md shadow-sm">
             <div>
-              <label htmlFor="email-address" className="sr-only">
-                Correo electrónico
-              </label>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="relative block w-full rounded-t-md border-0 py-2.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                placeholder="Correo electrónico"
-              />
-            </div>
-            <div>
               <label htmlFor="password" className="sr-only">
-                Contraseña
+                Nueva Contraseña
               </label>
               <input
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="current-password"
                 required
+                minLength={6}
+                className="relative block w-full rounded-t-md border-0 py-2.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                placeholder="Nueva Contraseña (mínimo 6 caracteres)"
+              />
+            </div>
+            <div>
+              <label htmlFor="confirmPassword" className="sr-only">
+                Confirmar Contraseña
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                minLength={6}
                 className="relative block w-full rounded-b-md border-0 py-2.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                placeholder="Contraseña"
+                placeholder="Confirmar Contraseña"
               />
             </div>
           </div>
@@ -68,19 +60,10 @@ export default function LoginPage({
               type="submit"
               className="group relative flex w-full justify-center rounded-md bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 transition-colors"
             >
-              Iniciar sesión
+              Guardar nueva contraseña
             </button>
           </div>
         </form>
-        
-        <div className="flex flex-col space-y-4 text-center text-sm mt-6">
-          <Link href="/forgot-password" className="font-medium text-gray-600 hover:text-gray-900 transition-colors">
-            ¿Olvidaste tu contraseña?
-          </Link>
-          <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
-            ¿No tienes cuenta? Registra al Superadministrador aquí
-          </Link>
-        </div>
       </div>
     </div>
   )
