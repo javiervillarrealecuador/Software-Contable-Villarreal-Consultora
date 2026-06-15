@@ -8,6 +8,8 @@ export default function Sidebar() {
 
   const menu = [
     { label: 'Dashboard', path: '/', icon: '📊' },
+    { label: 'Directorio', path: '/partners', icon: '👥' },
+    { label: 'Productos', path: '/products', icon: '🏷️' },
     { label: 'Ventas', path: '/sales', icon: '🛒' },
     { label: 'Compras', path: '/purchases', icon: '🛍️' },
     { label: 'Inventario', path: '/inventory', icon: '📦' },
