@@ -204,8 +204,10 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
         
         {/* COLUMNA 1: Datos Generales */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="card">
-            <h3 className="text-lg font-bold border-b pb-2 mb-4 text-slate-700">Información General</h3>
+          <div className="card shadow-sm border border-slate-100">
+            <h3 className="text-lg font-bold border-b pb-3 mb-5 text-slate-800 flex items-center gap-2">
+              <span className="text-xl">📄</span> Información General
+            </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Identificación */}
@@ -258,8 +260,10 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
             </div>
           </div>
 
-          <div className="card">
-            <h3 className="text-lg font-bold border-b pb-2 mb-4 text-slate-700">Dirección y Correspondencia</h3>
+          <div className="card shadow-sm border border-slate-100">
+            <h3 className="text-lg font-bold border-b pb-3 mb-5 text-slate-800 flex items-center gap-2">
+              <span className="text-xl">📍</span> Dirección y Correspondencia
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold mb-1">Calle Principal</label>
@@ -299,8 +303,10 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
             </div>
           </div>
 
-          <div className="card">
-            <h3 className="text-lg font-bold border-b pb-2 mb-4 text-slate-700">Ubicación Geográfica</h3>
+          <div className="card shadow-sm border border-slate-100">
+            <h3 className="text-lg font-bold border-b pb-3 mb-5 text-slate-800 flex items-center gap-2">
+              <span className="text-xl">🌍</span> Ubicación Geográfica
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Ciudad</label>
@@ -316,8 +322,10 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
 
         {/* COLUMNA 2: Relaciones, SRI, Observaciones */}
         <div className="space-y-6">
-          <div className="card bg-blue-50/50">
-            <h3 className="text-lg font-bold border-b pb-2 mb-4 text-blue-800">Relación con mi Empresa</h3>
+          <div className="card bg-blue-50/30 border border-blue-100 shadow-sm">
+            <h3 className="text-lg font-bold border-b border-blue-200 pb-3 mb-5 text-blue-800 flex items-center gap-2">
+              <span className="text-xl">🤝</span> Relación con la Empresa
+            </h3>
             <div className="grid grid-cols-2 gap-y-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" name="is_customer" checked={formData.is_customer} onChange={handleChange} />
@@ -362,13 +370,17 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
             </div>
           </div>
 
-          <div className="card">
-            <h3 className="text-lg font-bold border-b pb-2 mb-4 text-slate-700">Observación</h3>
+          <div className="card shadow-sm border border-slate-100">
+            <h3 className="text-lg font-bold border-b pb-3 mb-5 text-slate-800 flex items-center gap-2">
+              <span className="text-xl">📝</span> Observaciones
+            </h3>
             <textarea name="comment" value={formData.comment} onChange={handleChange} rows={4} className="w-full"></textarea>
           </div>
 
-          <div className="card bg-orange-50/50">
-            <h3 className="text-lg font-bold border-b border-orange-200 pb-2 mb-4 text-orange-800">Otros Datos (SRI)</h3>
+          <div className="card bg-orange-50/30 border border-orange-100 shadow-sm">
+            <h3 className="text-lg font-bold border-b border-orange-200 pb-3 mb-5 text-orange-800 flex items-center gap-2">
+              <span className="text-xl">🏛️</span> SRI y Tributación
+            </h3>
             <div className="space-y-3">
               <label className="flex items-center justify-between cursor-pointer">
                 <span className="text-sm font-semibold text-slate-700">Grande Contribuyente</span>
@@ -397,8 +409,10 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
 
         {/* TERCERA FILA: Contactos Adicionales y Bancos */}
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="card md:col-span-1">
-            <h3 className="text-lg font-bold border-b pb-2 mb-4 text-slate-700">Información Laboral</h3>
+          <div className="card shadow-sm border border-slate-100 md:col-span-1">
+            <h3 className="text-lg font-bold border-b pb-3 mb-5 text-slate-800 flex items-center gap-2">
+              <span className="text-xl">💼</span> Información Laboral
+            </h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Cargo</label>
@@ -411,8 +425,10 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
             </div>
           </div>
 
-          <div className="card md:col-span-1">
-            <h3 className="text-lg font-bold border-b pb-2 mb-4 text-slate-700">Crédito y Comercial</h3>
+          <div className="card shadow-sm border border-slate-100 md:col-span-1">
+            <h3 className="text-lg font-bold border-b pb-3 mb-5 text-slate-800 flex items-center gap-2">
+              <span className="text-xl">📈</span> Crédito y Comercial
+            </h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Días de Crédito</label>
@@ -429,8 +445,10 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
             </div>
           </div>
 
-          <div className="card md:col-span-1">
-            <h3 className="text-lg font-bold border-b pb-2 mb-4 text-slate-700">Transferencias Bancarias</h3>
+          <div className="card shadow-sm border border-emerald-50 md:col-span-1 bg-emerald-50/20">
+            <h3 className="text-lg font-bold border-b pb-3 mb-5 text-emerald-800 flex items-center gap-2">
+              <span className="text-xl">🏦</span> Transferencias Bancarias
+            </h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Banco</label>
