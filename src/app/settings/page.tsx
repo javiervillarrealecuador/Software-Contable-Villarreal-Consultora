@@ -53,6 +53,12 @@ interface CompanyFields {
   sri_contrib_especial: string;
   sri_agente_retencion: string;
   sri_rimpe: string;
+
+  // Cuentas Contables Globales
+  account_sale_tax_id?: number;
+  account_purchase_tax_id?: number;
+  account_withholding_rent_id?: number;
+  account_withholding_iva_id?: number;
 }
 
 export default function SettingsPage() {
@@ -62,8 +68,17 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [showProdWarning, setShowProdWarning] = useState(false);
   const [confirmText, setConfirmText] = useState('');
+  const [accounts, setAccounts] = useState<any[]>([]);
 
-  useEffect(() => { loadCompany(); }, []);
+  useEffect(() => { 
+    loadCompany(); 
+    loadAccounts();
+  }, []);
+
+  async function loadAccounts() {
+    const { data } = await supabase.from('account_account').select('id, code, name').order('code');
+    if (data) setAccounts(data);
+  }
 
   async function loadCompany() {
     const { data, error } = await supabase
@@ -95,6 +110,10 @@ export default function SettingsPage() {
           sri_contrib_especial: form.sri_contrib_especial || null,
           sri_agente_retencion: form.sri_agente_retencion || null,
           sri_rimpe: form.sri_rimpe || null,
+          account_sale_tax_id: form.account_sale_tax_id || null,
+          account_purchase_tax_id: form.account_purchase_tax_id || null,
+          account_withholding_rent_id: form.account_withholding_rent_id || null,
+          account_withholding_iva_id: form.account_withholding_iva_id || null,
         })
         .eq('id', company.id);
       if (error) throw error;
@@ -190,6 +209,41 @@ export default function SettingsPage() {
                 <div>
                   <label style={S.label}>Categoría RIMPE</label>
                   <input style={S.input} value={form.sri_rimpe || ''} onChange={e => set('sri_rimpe', e.target.value)} placeholder="Vacío si no aplica" />
+                </div>
+              </div>
+            </div>
+
+            {/* Contabilidad - Impuestos */}
+            <div style={S.card}>
+              <h2 style={S.sectionTitle}>Contabilidad - Impuestos</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={S.label}>IVA Ventas (Cobrado)</label>
+                  <select style={S.input} value={form.account_sale_tax_id || ''} onChange={e => set('account_sale_tax_id', e.target.value)}>
+                    <option value="">-- Seleccionar Cuenta --</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>IVA Compras (Pagado)</label>
+                  <select style={S.input} value={form.account_purchase_tax_id || ''} onChange={e => set('account_purchase_tax_id', e.target.value)}>
+                    <option value="">-- Seleccionar Cuenta --</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Retenciones de Impuesto a la Renta</label>
+                  <select style={S.input} value={form.account_withholding_rent_id || ''} onChange={e => set('account_withholding_rent_id', e.target.value)}>
+                    <option value="">-- Seleccionar Cuenta --</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Retenciones de IVA</label>
+                  <select style={S.input} value={form.account_withholding_iva_id || ''} onChange={e => set('account_withholding_iva_id', e.target.value)}>
+                    <option value="">-- Seleccionar Cuenta --</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>)}
+                  </select>
                 </div>
               </div>
             </div>

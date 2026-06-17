@@ -106,16 +106,15 @@ export async function generateSaleAccountingEntry(saleOrderId: number): Promise<
 
   // 6. Línea de IVA Cobrado (Haber)
   if (order.amount_tax > 0) {
-    // Buscamos cuenta de IVA (por simplicidad, usaríamos una cuenta configurada global, o el default_account_id del diario)
-    // Asumiremos que el account_id se busca de la configuración o usamos un placeholder por ahora
-    const { data: taxAccount } = await supabase.from('account_account').select('id').ilike('name', '%IVA Ventas%').limit(1).single();
+    // Buscar cuenta configurada en la empresa (account_sale_tax_id)
+    const { data: companyConfig } = await supabase.from('res_company').select('account_sale_tax_id').eq('id', order.company_id).single();
     
-    if (!taxAccount) {
-        throw new Error('No se encontró cuenta de IVA Ventas. Asegúrate de configurar la cuenta contable respectiva.');
+    if (!companyConfig || !companyConfig.account_sale_tax_id) {
+        throw new Error('No se encontró la cuenta de IVA Ventas. Asegúrate de configurarla en Configuración > Mi Empresa.');
     }
 
     moveLines.push({
-      account_id: taxAccount.id,
+      account_id: companyConfig.account_sale_tax_id,
       partner_id: order.partner_id,
       name: 'IVA Cobrado',
       debit: 0,

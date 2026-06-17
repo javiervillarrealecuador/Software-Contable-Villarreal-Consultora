@@ -25,6 +25,12 @@ export interface Company {
   active: boolean;
   created_at: string;
   updated_at: string;
+
+  // Integración Contable
+  account_sale_tax_id?: number;
+  account_purchase_tax_id?: number;
+  account_withholding_rent_id?: number;
+  account_withholding_iva_id?: number;
 }
 
 // Partner (Cliente, Proveedor, Contacto)
