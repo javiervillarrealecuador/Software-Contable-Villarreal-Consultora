@@ -4,7 +4,8 @@
 import { useState, useEffect } from 'react';
 
 import { getCompanies } from '@/lib/supabase';
-import { getAccounts, getJournals, getMoves, createMove, postMove } from '@/lib/accounting';
+import { getAccounts, getJournals, getMoves, getMove, createMove, postMove, deleteMove, draftMove } from '@/lib/accounting';
+
 import { getMoveTotals } from '@/types/capa1';
 import type { Company } from '@/types/capa0';
 import type { Account, Journal, Move, MoveLineInput } from '@/types/capa1';
@@ -34,6 +35,7 @@ export default function MovesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const [editingMoveId, setEditingMoveId] = useState<number | null>(null);
   const [journalId, setJournalId] = useState<number>(0);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [ref, setRef] = useState('');
@@ -86,13 +88,21 @@ export default function MovesPage() {
 
     try {
       setSaving(true);
+      if (editingMoveId) {
+        // Para editar: primero eliminamos el existente y creamos uno nuevo con el mismo ID no se puede fácil.
+        // Lo correcto es borrar sus líneas y actualizar la cabecera, o borrar todo y crear de nuevo.
+        // Vamos a eliminar el asiento completo y recrearlo.
+        await deleteMove(editingMoveId);
+      }
+      
       await createMove(companyId, { journal_id: journalId, date, ref, lines: validLines });
       setModalOpen(false);
+      setEditingMoveId(null);
       setLines([emptyLine(), emptyLine()]);
       setRef('');
       loadAll();
     } catch (err: any) {
-      alert('Error: ' + (err.message || 'No se pudo crear el asiento'));
+      alert('Error: ' + (err.message || 'No se pudo guardar el asiento'));
     } finally {
       setSaving(false);
     }
@@ -104,6 +114,49 @@ export default function MovesPage() {
       loadAll();
     } catch (err: any) {
       alert('Error al publicar: ' + (err.message || ''));
+    }
+  }
+
+  async function handleDraft(moveId: number) {
+    if (!confirm('¿Estás seguro de regresar este asiento a borrador?')) return;
+    try {
+      await draftMove(moveId);
+      loadAll();
+    } catch (err: any) {
+      alert('Error al revertir: ' + (err.message || ''));
+    }
+  }
+
+  async function handleDelete(moveId: number) {
+    if (!confirm('¿Estás seguro de eliminar este asiento permanentemente?')) return;
+    try {
+      await deleteMove(moveId);
+      loadAll();
+    } catch (err: any) {
+      alert('Error al eliminar: ' + (err.message || ''));
+    }
+  }
+
+  async function handleEdit(moveId: number) {
+    try {
+      const fullMove = await getMove(moveId);
+      if (fullMove.state === 'posted') {
+        alert('No se puede editar un asiento publicado. Regrésalo a borrador primero.');
+        return;
+      }
+      setEditingMoveId(moveId);
+      setJournalId(fullMove.journal_id);
+      setDate(fullMove.date);
+      setRef(fullMove.ref || '');
+      setLines(fullMove.lines?.length ? fullMove.lines.map((l: any) => ({
+        account_id: l.account_id,
+        name: l.name || '',
+        debit: l.debit || 0,
+        credit: l.credit || 0
+      })) : [emptyLine(), emptyLine()]);
+      setModalOpen(true);
+    } catch (err: any) {
+      alert('Error al cargar el asiento: ' + (err.message || ''));
     }
   }
 
@@ -125,7 +178,13 @@ export default function MovesPage() {
           <p className="text-slate-500 mt-2">Libro diario y movimientos financieros</p>
         </div>
         <div className="flex gap-4 items-center">
-          <button className="btn btn-primary" onClick={() => setModalOpen(true)}>+ Nuevo Asiento</button>
+          <button className="btn btn-primary" onClick={() => {
+            setEditingMoveId(null);
+            setLines([emptyLine(), emptyLine()]);
+            setRef('');
+            setDate(new Date().toISOString().slice(0, 10));
+            setModalOpen(true);
+          }}>+ Nuevo Asiento</button>
         </div>
       </header>
 
@@ -162,9 +221,16 @@ export default function MovesPage() {
                     <td style={{ ...S.td, textAlign: 'right', fontFamily: 'monospace' }}>${Number(m.amount_total).toFixed(2)}</td>
                     <td style={S.td}>{stateBadge(m.state)}</td>
                     <td style={S.td}>
-                      {m.state === 'draft' && (
-                        <button style={S.btnSm} onClick={() => handlePost(m.id)}>Publicar</button>
-                      )}
+                      <div className="flex gap-2 items-center">
+                        {m.state === 'draft' && (
+                          <button style={S.btnSm} onClick={() => handlePost(m.id)}>Publicar</button>
+                        )}
+                        {m.state === 'posted' && (
+                          <button style={{ ...S.btnSm, background: '#eab308' }} onClick={() => handleDraft(m.id)}>Revertir a Borrador</button>
+                        )}
+                        <button style={{ ...S.btnSm, background: '#3b82f6' }} onClick={() => handleEdit(m.id)}>Editar</button>
+                        <button style={{ ...S.btnSm, background: '#ef4444' }} onClick={() => handleDelete(m.id)}>Eliminar</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -178,7 +244,9 @@ export default function MovesPage() {
       {modalOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '1rem' }}>
           <div style={{ background: 'white', borderRadius: '0.75rem', padding: '2rem', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ marginBottom: '1.5rem', color: '#1e293b' }}>Nuevo Asiento Contable</h2>
+            <h2 style={{ marginBottom: '1.5rem', color: '#1e293b' }}>
+              {editingMoveId ? 'Editar Asiento Contable' : 'Nuevo Asiento Contable'}
+            </h2>
             <form onSubmit={handleSubmit}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div>

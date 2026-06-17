@@ -263,6 +263,33 @@ export async function cancelMove(moveId: number) {
   return data[0];
 }
 
+/**
+ * Pasa un asiento a estado borrador
+ */
+export async function draftMove(moveId: number) {
+  const { data, error } = await supabase
+    .from('account_move')
+    .update({ state: 'draft', updated_at: new Date().toISOString() })
+    .eq('id', moveId)
+    .select();
+
+  if (error) throw error;
+  return data[0];
+}
+
+/**
+ * Elimina un asiento contable
+ */
+export async function deleteMove(moveId: number) {
+  const { error } = await supabase
+    .from('account_move')
+    .delete()
+    .eq('id', moveId);
+
+  if (error) throw error;
+  return true;
+}
+
 // ============ REPORTES BÁSICOS ============
 
 /**

@@ -3,7 +3,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getRentRules, getIvaRules, updateIvaRule, updateRentRule } from '@/lib/withholding';
+import { getRentRules, getIvaRules, updateIvaRule, updateRentRule, setRentRuleAccount, setIvaRuleAccount } from '@/lib/withholding';
+import { getCompanies } from '@/lib/supabase';
+import { getAccounts } from '@/lib/accounting';
 import { TAXPAYER_LABELS, IVA_TARGET_LABELS } from '@/types/capa2';
 import type { RentRule, IvaRule } from '@/types/capa2';
 
@@ -22,14 +24,26 @@ export default function RulesPage() {
   const [tab, setTab] = useState<'rent' | 'iva'>('rent');
   const [rentRules, setRentRules] = useState<RentRule[]>([]);
   const [ivaRules, setIvaRules] = useState<IvaRule[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [activeCompanyId, setActiveCompanyId] = useState<number | null>(null);
   const [saved, setSaved] = useState<number | null>(null);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     try {
-      const [rr, ir] = await Promise.all([getRentRules(), getIvaRules()]);
-      setRentRules(rr); setIvaRules(ir);
+      const comps = await getCompanies();
+      const compId = comps.length > 0 ? comps[0].id : 1;
+      setActiveCompanyId(compId);
+      
+      const [rr, ir, accs] = await Promise.all([
+        getRentRules(compId), 
+        getIvaRules(compId),
+        getAccounts(compId)
+      ]);
+      setRentRules(rr); 
+      setIvaRules(ir);
+      setAccounts(accs.filter((a: any) => a.account_type?.code?.startsWith('2'))); // Sólo pasivos
     } catch (e) { console.error(e); }
   }
 
@@ -43,6 +57,23 @@ export default function RulesPage() {
       await updateRentRule(id, field === 'percent' ? { percent: Number(value) } : { air_code: value });
       setSaved(id); setTimeout(() => setSaved(null), 1500);
     } catch (e: any) { alert('Error: ' + e.message); }
+  }
+
+  async function handleAccountChange(ruleId: number, type: 'rent' | 'iva', accountId: string) {
+    if (!activeCompanyId) return;
+    try {
+      const accId = accountId ? parseInt(accountId) : null;
+      if (type === 'rent') {
+        await setRentRuleAccount(activeCompanyId, ruleId, accId);
+        setRentRules(rs => rs.map(r => r.id === ruleId ? { ...r, account_id: accId || undefined } : r));
+      } else {
+        await setIvaRuleAccount(activeCompanyId, ruleId, accId);
+        setIvaRules(rs => rs.map(r => r.id === ruleId ? { ...r, account_id: accId || undefined } : r));
+      }
+      setSaved(ruleId); setTimeout(() => setSaved(null), 1500);
+    } catch (e: any) {
+      alert('Error guardando cuenta: ' + e.message);
+    }
   }
 
   return (
@@ -71,6 +102,7 @@ export default function RulesPage() {
               <thead><tr>
                 <th style={S.th}>Cód. AIR</th><th style={S.th}>Concepto</th>
                 <th style={S.th}>Aplica a</th><th style={S.th}>Ref. legal</th>
+                <th style={S.th}>Cuenta Contable (Pasivo)</th>
                 <th style={{ ...S.th, textAlign: 'right' }}>%</th>
               </tr></thead>
               <tbody>
@@ -83,6 +115,18 @@ export default function RulesPage() {
                     <td style={S.td}>{r.name}</td>
                     <td style={S.td}>{r.applies_to === 'goods' ? 'Bienes' : r.applies_to === 'services' ? 'Servicios' : 'Ambos'}</td>
                     <td style={{ ...S.td, fontFamily: 'monospace', fontSize: '0.78rem' }}>{r.legal_ref}</td>
+                    <td style={S.td}>
+                      <select 
+                        style={{ ...S.inputSm, width: '180px', textAlign: 'left' }}
+                        value={r.account_id || ''}
+                        onChange={e => handleAccountChange(r.id, 'rent', e.target.value)}
+                      >
+                        <option value="">-- Sin asignar --</option>
+                        {accounts.map((a: any) => (
+                          <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td style={{ ...S.td, textAlign: 'right' }}>
                       <input style={S.inputSm} type="number" step="0.01" defaultValue={r.percent}
                         onBlur={e => Number(e.target.value) !== Number(r.percent) && saveRent(r.id, 'percent', e.target.value)} />
@@ -100,6 +144,7 @@ export default function RulesPage() {
               <thead><tr>
                 <th style={S.th}>Comprador (retiene)</th><th style={S.th}>Proveedor</th>
                 <th style={S.th}>Concepto</th><th style={S.th}>Nota</th>
+                <th style={S.th}>Cuenta Contable (Pasivo)</th>
                 <th style={{ ...S.th, textAlign: 'right' }}>% sobre IVA</th>
               </tr></thead>
               <tbody>
@@ -109,6 +154,18 @@ export default function RulesPage() {
                     <td style={S.td}>{TAXPAYER_LABELS[r.seller_type] || r.seller_type}</td>
                     <td style={S.td}>{IVA_TARGET_LABELS[r.target] || r.target}</td>
                     <td style={{ ...S.td, fontSize: '0.78rem', color: '#64748b' }}>{r.note}</td>
+                    <td style={S.td}>
+                      <select 
+                        style={{ ...S.inputSm, width: '180px', textAlign: 'left' }}
+                        value={r.account_id || ''}
+                        onChange={e => handleAccountChange(r.id, 'iva', e.target.value)}
+                      >
+                        <option value="">-- Sin asignar --</option>
+                        {accounts.map((a: any) => (
+                          <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td style={{ ...S.td, textAlign: 'right' }}>
                       <input style={S.inputSm} type="number" step="0.01" defaultValue={r.percent}
                         onBlur={e => Number(e.target.value) !== Number(r.percent) && saveIva(r.id, Number(e.target.value))} />

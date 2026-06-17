@@ -48,6 +48,7 @@ export interface RentRule {
   applies_to: 'goods' | 'services' | 'both';
   legal_ref?: string;
   active: boolean;
+  account_id?: number; // Added from company_rent_rule_account
 }
 
 // Regla de retencion IVA
@@ -59,6 +60,7 @@ export interface IvaRule {
   percent: number;
   note?: string;
   active: boolean;
+  account_id?: number; // Added from company_iva_rule_account
 }
 
 // Comprobante de retencion
