@@ -381,7 +381,7 @@ export default function SalesPage() {
         alert('Error: ' + errs[0].error);
       } else {
         alert('Contabilizado con éxito. Asiento: MOVE-' + data.results[0].moveId);
-        loadCurrent(currentId);
+        handleOpen(currentId);
       }
     } catch (err: any) {
       alert('Error: ' + err.message);
