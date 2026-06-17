@@ -102,7 +102,7 @@ export default function SalesPage() {
   // Tabs y Retencion
   const [activeTab, setActiveTab] = useState<'lines' | 'withholding'>('lines');
   const [withholding, setWithholding] = useState<ReceivedWithholding | null>(null);
-  const [whForm, setWhForm] = useState({ ret_number: '', ret_auth: '', valor_ret_renta: 0, valor_ret_iva: 0 });
+  const [whForm, setWhForm] = useState({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0 });
 
   const isEditable = docState === 'draft' || !currentId;
 
@@ -175,7 +175,7 @@ export default function SalesPage() {
     setLines([emptyLine()]);
     setActiveTab('lines');
     setWithholding(null);
-    setWhForm({ ret_number: '', ret_auth: '', valor_ret_renta: 0, valor_ret_iva: 0 });
+    setWhForm({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0 });
     setMode('form');
   }
 
@@ -214,9 +214,9 @@ export default function SalesPage() {
       setWithholding(wh);
       setActiveTab('lines');
       if (wh) {
-        setWhForm({ ret_number: wh.ret_number || '', ret_auth: wh.ret_auth || '', valor_ret_renta: wh.valor_ret_renta, valor_ret_iva: wh.valor_ret_iva });
+        setWhForm({ ret_number: wh.ret_number || '', ret_auth: wh.ret_auth || '', base_renta: wh.base_renta || 0, porcentaje_renta: wh.porcentaje_renta || 0, valor_ret_renta: wh.valor_ret_renta || 0, base_iva: wh.base_iva || 0, porcentaje_iva: wh.porcentaje_iva || 0, valor_ret_iva: wh.valor_ret_iva || 0 });
       } else {
-        setWhForm({ ret_number: '', ret_auth: '', valor_ret_renta: 0, valor_ret_iva: 0 });
+        setWhForm({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0 });
       }
       
       setMode('form');
@@ -409,6 +409,46 @@ export default function SalesPage() {
     }
   };
 
+  const handleUploadXML = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/xml');
+        const info = doc.querySelector('infoTributaria');
+        if (!info) throw new Error('No se encontró infoTributaria en el XML');
+        const estab = info.querySelector('estab')?.textContent || '';
+        const ptoEmi = info.querySelector('ptoEmi')?.textContent || '';
+        const sec = info.querySelector('secuencial')?.textContent || '';
+        const ret_number = `${estab}-${ptoEmi}-${sec}`;
+        const ret_auth = info.querySelector('claveAcceso')?.textContent || '';
+
+        let base_renta = 0, porcentaje_renta = 0, valor_ret_renta = 0;
+        let base_iva = 0, porcentaje_iva = 0, valor_ret_iva = 0;
+
+        const impuestos = doc.querySelectorAll('impuestos > impuesto');
+        impuestos.forEach(imp => {
+          const cod = imp.querySelector('codigo')?.textContent;
+          const base = parseFloat(imp.querySelector('baseImponible')?.textContent || '0');
+          const pct = parseFloat(imp.querySelector('porcentajeRetener')?.textContent || '0');
+          const val = parseFloat(imp.querySelector('valorRetenido')?.textContent || '0');
+          
+          if (cod === '1') { base_renta += base; porcentaje_renta = pct; valor_ret_renta += val; } // Renta
+          if (cod === '2') { base_iva += base; porcentaje_iva = pct; valor_ret_iva += val; } // IVA
+        });
+
+        setWhForm({ ret_number, ret_auth, base_renta, porcentaje_renta, valor_ret_renta, base_iva, porcentaje_iva, valor_ret_iva });
+      } catch (err: any) {
+        alert('Error leyendo XML: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const handleSaveWithholding = async () => {
     if (!currentId) return alert('Debes guardar la factura primero.');
     if (!whForm.ret_number || !whForm.ret_auth) return alert('Número y Autorización son obligatorios.');
@@ -422,8 +462,10 @@ export default function SalesPage() {
         date: date,
         ret_number: whForm.ret_number,
         ret_auth: whForm.ret_auth,
-        base_renta: totals.amount_untaxed,
-        base_iva: totals.amount_tax,
+        base_renta: whForm.base_renta || totals.amount_untaxed,
+        base_iva: whForm.base_iva || totals.amount_tax,
+        porcentaje_renta: whForm.porcentaje_renta,
+        porcentaje_iva: whForm.porcentaje_iva,
         valor_ret_renta: whForm.valor_ret_renta,
         valor_ret_iva: whForm.valor_ret_iva
       });
@@ -754,10 +796,25 @@ export default function SalesPage() {
                   </div>
                 ) : (
                   <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <p className="text-sm text-slate-500">Ingresa los datos manualmente o sube el XML.</p>
+                      <label style={{ ...C.btnSmall, background: '#eab308', color: '#854d0e', cursor: 'pointer', padding: '6px 12px' }}>
+                        📄 Subir XML
+                        <input type="file" accept=".xml" style={{ display: 'none' }} onChange={handleUploadXML} />
+                      </label>
+                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
                       <div><label style={C.label}>No. Retención *</label><input style={C.input} value={whForm.ret_number} onChange={e => setWhForm({...whForm, ret_number: e.target.value})} placeholder="001-001-123456789" /></div>
                       <div><label style={C.label}>Autorización *</label><input style={C.input} value={whForm.ret_auth} onChange={e => setWhForm({...whForm, ret_auth: e.target.value})} /></div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '6px' }}>
+                      <div><label style={C.label}>Base Imponible Renta</label><input style={C.input} type="number" step="0.01" value={whForm.base_renta} onChange={e => setWhForm({...whForm, base_renta: parseFloat(e.target.value)||0})} /></div>
+                      <div><label style={C.label}>% Renta</label><input style={C.input} type="number" step="0.01" value={whForm.porcentaje_renta} onChange={e => setWhForm({...whForm, porcentaje_renta: parseFloat(e.target.value)||0})} /></div>
                       <div><label style={C.label}>Valor Retención Renta</label><input style={C.input} type="number" step="0.01" value={whForm.valor_ret_renta} onChange={e => setWhForm({...whForm, valor_ret_renta: parseFloat(e.target.value)||0})} /></div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '6px' }}>
+                      <div><label style={C.label}>Base Imponible IVA</label><input style={C.input} type="number" step="0.01" value={whForm.base_iva} onChange={e => setWhForm({...whForm, base_iva: parseFloat(e.target.value)||0})} /></div>
+                      <div><label style={C.label}>% IVA</label><input style={C.input} type="number" step="0.01" value={whForm.porcentaje_iva} onChange={e => setWhForm({...whForm, porcentaje_iva: parseFloat(e.target.value)||0})} /></div>
                       <div><label style={C.label}>Valor Retención IVA</label><input style={C.input} type="number" step="0.01" value={whForm.valor_ret_iva} onChange={e => setWhForm({...whForm, valor_ret_iva: parseFloat(e.target.value)||0})} /></div>
                     </div>
                     <button style={{ ...C.btnGreen, width: 'auto', padding: '8px 16px' }} onClick={handleSaveWithholding} disabled={saving}>Guardar Retención</button>

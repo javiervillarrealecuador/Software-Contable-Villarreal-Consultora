@@ -19,6 +19,8 @@ export interface ReceivedWithholding {
   ret_auth: string | null;
   base_renta: number;
   base_iva: number;
+  porcentaje_renta: number;
+  porcentaje_iva: number;
   valor_ret_renta: number;
   valor_ret_iva: number;
   state: 'registered' | 'cancel';
@@ -60,12 +62,14 @@ export async function createReceivedWithholding(input: {
   partner_id: number;
   date: string;
   ret_number?: string;
-  ret_auth?: string;
-  base_renta: number;
-  base_iva: number;
-  valor_ret_renta: number;
-  valor_ret_iva: number;
-  notes?: string;
+  ret_auth?: string | null;
+  base_renta?: number;
+  base_iva?: number;
+  porcentaje_renta?: number;
+  porcentaje_iva?: number;
+  valor_ret_renta?: number;
+  valor_ret_iva?: number;
+  notes?: string | null;
 }): Promise<ReceivedWithholding> {
   const { data, error } = await supabase
     .from('sale_received_withholding')
