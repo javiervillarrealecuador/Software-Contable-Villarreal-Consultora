@@ -365,6 +365,7 @@ export default function NewPurchasePage() {
         <SelectPartnerModal
           companyId={activeCompanyId}
           partners={partners}
+          filterType="supplier"
           onSelect={(id, p) => {
             if (p && !partners.find(x => x.id === id)) {
               setPartners(prev => [...prev, p]);

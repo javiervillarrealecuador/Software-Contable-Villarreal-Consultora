@@ -8,6 +8,8 @@ interface PartnerMini {
   name: string;
   vat?: string;
   city?: string;
+  is_customer?: boolean;
+  is_supplier?: boolean;
 }
 
 interface SelectPartnerModalProps {
@@ -16,6 +18,7 @@ interface SelectPartnerModalProps {
   onSelect: (partnerId: number, partner?: PartnerMini) => void;
   onCancel: () => void;
   onCreateNew: () => void;
+  filterType?: 'customer' | 'supplier' | 'all';
 }
 
 export default function SelectPartnerModal({
@@ -24,6 +27,7 @@ export default function SelectPartnerModal({
   onSelect,
   onCancel,
   onCreateNew,
+  filterType = 'all',
 }: SelectPartnerModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<PartnerMini[]>(partners);
@@ -31,10 +35,17 @@ export default function SelectPartnerModal({
 
   useEffect(() => {
     if (!companyId) {
-      if (!searchTerm) setResults(partners);
+      let filtered = partners;
+      if (filterType === 'customer') {
+        filtered = partners.filter(p => p.is_customer);
+      } else if (filterType === 'supplier') {
+        filtered = partners.filter(p => p.is_supplier);
+      }
+
+      if (!searchTerm) setResults(filtered);
       else {
         const lower = searchTerm.toLowerCase();
-        setResults(partners.filter(p => 
+        setResults(filtered.filter(p => 
           p.name.toLowerCase().includes(lower) || 
           (p.vat && p.vat.includes(searchTerm))
         ));
@@ -46,16 +57,22 @@ export default function SelectPartnerModal({
       setLoading(true);
       let q = supabase
         .from('res_partner')
-        .select('id, name, vat, city')
+        .select('id, name, vat, city, is_customer, is_supplier')
         .eq('company_id', companyId)
         .eq('active', true);
+
+      if (filterType === 'customer') {
+        q = q.eq('is_customer', true);
+      } else if (filterType === 'supplier') {
+        q = q.eq('is_supplier', true);
+      }
         
       if (searchTerm) {
         q = q.or(`name.ilike.%${searchTerm}%,vat.ilike.%${searchTerm}%`);
       }
       
       const { data } = await q.order('name').limit(20);
-      setResults(data || []);
+      setResults((data as PartnerMini[]) || []);
       setLoading(false);
     }
     
@@ -63,7 +80,7 @@ export default function SelectPartnerModal({
       searchDB();
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm, companyId, partners]);
+  }, [searchTerm, companyId, partners, filterType]);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

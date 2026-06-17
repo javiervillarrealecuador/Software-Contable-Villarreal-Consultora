@@ -1014,6 +1014,7 @@ export default function SalesPage() {
         <SelectPartnerModal
           companyId={activeCompanyId}
           partners={partners}
+          filterType="customer"
           onSelect={(id, p) => {
             if (p && !partners.find(x => x.id === id)) {
               setPartners(prev => [...prev, p]);
