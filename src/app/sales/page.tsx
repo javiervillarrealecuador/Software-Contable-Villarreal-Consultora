@@ -15,6 +15,7 @@ import {
 import { getProducts, getLocations } from '@/lib/inventory';
 import { generateFacturaForSale, downloadFacturaXml, sendSaleToSri } from '@/lib/sri-factura-db';
 import { emitNotaCreditoForSale, emitNotaDebitoForSale, emitGuiaRemisionForSale, downloadXmlFile } from '@/lib/sri-docs-db';
+import { getWithholdingForSale, createReceivedWithholding, type ReceivedWithholding } from '@/lib/received-withholding';
 import QuickCreatePartnerModal from '@/components/modals/QuickCreatePartnerModal';
 import QuickCreateProductModal from '@/components/modals/QuickCreateProductModal';
 import SelectPartnerModal from '@/components/modals/SelectPartnerModal';
@@ -98,6 +99,11 @@ export default function SalesPage() {
   const [showSelectPartnerModal, setShowSelectPartnerModal] = useState(false);
   const [showSelectProductModalForLine, setShowSelectProductModalForLine] = useState<number | null>(null);
 
+  // Tabs y Retencion
+  const [activeTab, setActiveTab] = useState<'lines' | 'withholding'>('lines');
+  const [withholding, setWithholding] = useState<ReceivedWithholding | null>(null);
+  const [whForm, setWhForm] = useState({ ret_number: '', ret_auth: '', valor_ret_renta: 0, valor_ret_iva: 0 });
+
   const isEditable = docState === 'draft' || !currentId;
 
   useEffect(() => { loadAll(); }, []);
@@ -167,6 +173,9 @@ export default function SalesPage() {
     setObservation('');
     setReference('');
     setLines([emptyLine()]);
+    setActiveTab('lines');
+    setWithholding(null);
+    setWhForm({ ret_number: '', ret_auth: '', valor_ret_renta: 0, valor_ret_iva: 0 });
     setMode('form');
   }
 
@@ -200,6 +209,16 @@ export default function SalesPage() {
         description: l.description || undefined,
       }));
       setLines(mappedLines.length > 0 ? mappedLines : [emptyLine()]);
+      
+      const wh = await getWithholdingForSale(id);
+      setWithholding(wh);
+      setActiveTab('lines');
+      if (wh) {
+        setWhForm({ ret_number: wh.ret_number || '', ret_auth: wh.ret_auth || '', valor_ret_renta: wh.valor_ret_renta, valor_ret_iva: wh.valor_ret_iva });
+      } else {
+        setWhForm({ ret_number: '', ret_auth: '', valor_ret_renta: 0, valor_ret_iva: 0 });
+      }
+      
       setMode('form');
     } catch (e: any) { alert('Error: ' + (e.message || '')); }
   }
@@ -390,6 +409,46 @@ export default function SalesPage() {
     }
   };
 
+  const handleSaveWithholding = async () => {
+    if (!currentId) return alert('Debes guardar la factura primero.');
+    if (!whForm.ret_number || !whForm.ret_auth) return alert('Número y Autorización son obligatorios.');
+    if (whForm.valor_ret_renta === 0 && whForm.valor_ret_iva === 0) return alert('Debe ingresar un valor de retención.');
+    try {
+      setSaving(true);
+      await createReceivedWithholding({
+        company_id: activeCompanyId,
+        sale_order_id: currentId,
+        partner_id: partnerId,
+        date: date,
+        ret_number: whForm.ret_number,
+        ret_auth: whForm.ret_auth,
+        base_renta: totals.amount_untaxed,
+        base_iva: totals.amount_tax,
+        valor_ret_renta: whForm.valor_ret_renta,
+        valor_ret_iva: whForm.valor_ret_iva
+      });
+      alert('Retención guardada.');
+      handleOpen(currentId);
+    } catch (e: any) { alert('Error: ' + e.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleContabilizarWithholding = async () => {
+    if (!withholding) return;
+    try {
+      const res = await fetch('/api/accounting/received-withholding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ withholdingIds: [withholding.id] })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (data.errors && data.errors.length > 0) throw new Error(data.errors[0].error);
+      alert('Retención contabilizada. Asiento: MOVE-' + data.results[0].moveId);
+      handleOpen(currentId!);
+    } catch (e: any) { alert('Error contabilizando retención: ' + e.message); }
+  };
+
   // === LIST MODE ===
   if (mode === 'list') {
     return (
@@ -566,99 +625,144 @@ export default function SalesPage() {
             </div>
           </div>
 
-          {/* Grilla de lineas */}
-          <div style={{ background: 'white', border: '1px solid #d1d9e0', borderRadius: '6px', overflow: 'hidden', marginBottom: '0.75rem' }}>
-            <table style={C.table}>
-              <thead>
-                <tr>
-                  <th style={{ ...C.th, width: 30 }}>ITEM</th>
-                  <th style={{ ...C.th, width: 70 }}>Codigo</th>
-                  <th style={C.th}>Descripcion</th>
-                  <th style={{ ...C.th, width: 80 }}>Bodega</th>
-                  <th style={{ ...C.th, width: 55 }}>U.Med.</th>
-                  <th style={{ ...C.th, width: 70 }}>Tipo IVA</th>
-                  <th style={{ ...C.thR, width: 65 }}>Cantidad</th>
-                  <th style={{ ...C.thR, width: 75 }}>Precio</th>
-                  <th style={{ ...C.thR, width: 50 }}>%Desc</th>
-                  <th style={{ ...C.thR, width: 80 }}>Total PVP</th>
-                  <th style={{ ...C.thR, width: 85 }}>PVP T+IVA</th>
-                  {isEditable && <th style={{ ...C.th, width: 30 }}></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((l, i) => {
-                  const sub = round2(l.quantity * l.price_unit * (1 - l.discount_percent / 100));
-                  const iva = l.tax_type === 'gravado' ? round2(sub * l.iva_rate / 100) : 0;
-                  const pvpTotal = round2(sub + iva + (l.ice_amount || 0));
-                  const prodCode = getProductCode(l.product_id);
-                  const prodUom = getProductUom(l.product_id);
-                  return (
-                    <tr key={i}>
-                      <td style={{ ...C.td, textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>{i + 1}</td>
-                      <td style={{ ...C.td, fontFamily: 'monospace', fontSize: '11px' }}>{prodCode || '-'}</td>
-                      <td style={C.td}>
-                        {isEditable ? (
-                          <button
-                            type="button"
-                            onClick={() => setShowSelectProductModalForLine(i)}
-                            style={{ ...C.tdInput, textAlign: 'left', backgroundColor: '#fff', cursor: 'pointer', display: 'block', width: '100%', height: '100%' }}
-                          >
-                            {l.product_id ? (getProductName(l.product_id) || `Producto #${l.product_id}`) : '-- Seleccionar Producto --'}
-                          </button>
-                        ) : (
-                          <span>{getProductName(l.product_id) || '-'}</span>
-                        )}
-                      </td>
-                      <td style={C.td}>
-                        {isEditable ? (
-                          <select style={{ ...C.tdInput, textAlign: 'left', fontSize: '11px' }} value={l.location_id || 0} onChange={e => updLine(i, 'location_id', Number(e.target.value) || undefined)}>
-                            <option value={0}>--</option>
-                            {internalLocs.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
-                          </select>
-                        ) : (
-                          <span style={{ fontSize: '11px' }}>{internalLocs.find(loc => loc.id === l.location_id)?.name || '-'}</span>
-                        )}
-                      </td>
-                      <td style={{ ...C.td, fontSize: '11px', color: '#64748b' }}>{prodUom || 'Und'}</td>
-                      <td style={C.td}>
-                        {isEditable ? (
-                          <select style={{ ...C.tdInput, textAlign: 'left', fontSize: '11px' }} value={l.tax_type} onChange={e => updLine(i, 'tax_type', e.target.value)}>
-                            {TAX_LINE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                          </select>
-                        ) : (
-                          <span style={{ fontSize: '11px' }}>{TAX_LINE_TYPES.find(t => t.value === l.tax_type)?.label || l.tax_type}</span>
-                        )}
-                      </td>
-                      <td style={C.tdR}>
-                        {isEditable ? (
-                          <input style={C.tdInput} type="number" step="0.01" min="0" value={l.quantity || ''} onChange={e => updLine(i, 'quantity', parseFloat(e.target.value) || 0)} />
-                        ) : <span>{l.quantity}</span>}
-                      </td>
-                      <td style={C.tdR}>
-                        {isEditable ? (
-                          <input style={C.tdInput} type="number" step="0.000001" min="0" value={l.price_unit || ''} onChange={e => updLine(i, 'price_unit', parseFloat(e.target.value) || 0)} />
-                        ) : <span>{fmt(l.price_unit)}</span>}
-                      </td>
-                      <td style={C.tdR}>
-                        {isEditable ? (
-                          <input style={C.tdInput} type="number" step="0.01" min="0" max="100" value={l.discount_percent || ''} onChange={e => updLine(i, 'discount_percent', parseFloat(e.target.value) || 0)} />
-                        ) : <span>{l.discount_percent || 0}%</span>}
-                      </td>
-                      <td style={{ ...C.tdR, fontWeight: 600 }}>${fmt(sub)}</td>
-                      <td style={{ ...C.tdR, fontWeight: 700, color: '#166534' }}>${fmt(pvpTotal)}</td>
-                      {isEditable && (
-                        <td style={C.td}>
-                          {lines.length > 1 && <button style={{ ...C.btnSmall, background: '#dc2626', color: 'white' }} onClick={() => setLines(ls => ls.filter((_, idx) => idx !== i))}>x</button>}
-                        </td>
-                      )}
+          {/* TABS */}
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '0' }}>
+            <button
+              style={{ padding: '8px 16px', background: activeTab === 'lines' ? 'white' : '#e2e8f0', border: '1px solid #d1d9e0', borderBottom: activeTab === 'lines' ? 'none' : '1px solid #d1d9e0', borderRadius: '6px 6px 0 0', fontWeight: 600, fontSize: '12px', cursor: 'pointer', zIndex: activeTab === 'lines' ? 1 : 0, position: 'relative', top: '1px' }}
+              onClick={() => setActiveTab('lines')}
+            >Líneas de Venta</button>
+            {currentId && (
+              <button
+                style={{ padding: '8px 16px', background: activeTab === 'withholding' ? 'white' : '#e2e8f0', border: '1px solid #d1d9e0', borderBottom: activeTab === 'withholding' ? 'none' : '1px solid #d1d9e0', borderRadius: '6px 6px 0 0', fontWeight: 600, fontSize: '12px', cursor: 'pointer', zIndex: activeTab === 'withholding' ? 1 : 0, position: 'relative', top: '1px' }}
+                onClick={() => setActiveTab('withholding')}
+              >Retenciones Recibidas</button>
+            )}
+          </div>
+
+          <div style={{ background: 'white', border: '1px solid #d1d9e0', borderRadius: '0 6px 6px 6px', overflow: 'hidden', marginBottom: '0.75rem' }}>
+            {activeTab === 'lines' ? (
+              <>
+                <table style={C.table}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...C.th, width: 30 }}>ITEM</th>
+                      <th style={{ ...C.th, width: 70 }}>Codigo</th>
+                      <th style={C.th}>Descripcion</th>
+                      <th style={{ ...C.th, width: 80 }}>Bodega</th>
+                      <th style={{ ...C.th, width: 55 }}>U.Med.</th>
+                      <th style={{ ...C.th, width: 70 }}>Tipo IVA</th>
+                      <th style={{ ...C.thR, width: 65 }}>Cantidad</th>
+                      <th style={{ ...C.thR, width: 75 }}>Precio</th>
+                      <th style={{ ...C.thR, width: 50 }}>%Desc</th>
+                      <th style={{ ...C.thR, width: 80 }}>Total PVP</th>
+                      <th style={{ ...C.thR, width: 85 }}>PVP T+IVA</th>
+                      {isEditable && <th style={{ ...C.th, width: 30 }}></th>}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {isEditable && (
-              <div style={{ padding: '4px 8px', borderTop: '1px solid #e2e8f0' }}>
-                <button style={{ ...C.btnSmall, background: '#64748b', color: 'white' }} onClick={() => setLines(ls => [...ls, emptyLine()])}>+ Agregar linea</button>
+                  </thead>
+                  <tbody>
+                    {lines.map((l, i) => {
+                      const sub = round2(l.quantity * l.price_unit * (1 - l.discount_percent / 100));
+                      const iva = l.tax_type === 'gravado' ? round2(sub * l.iva_rate / 100) : 0;
+                      const pvpTotal = round2(sub + iva + (l.ice_amount || 0));
+                      const prodCode = getProductCode(l.product_id);
+                      const prodUom = getProductUom(l.product_id);
+                      return (
+                        <tr key={i}>
+                          <td style={{ ...C.td, textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>{i + 1}</td>
+                          <td style={{ ...C.td, fontFamily: 'monospace', fontSize: '11px' }}>{prodCode || '-'}</td>
+                          <td style={C.td}>
+                            {isEditable ? (
+                              <button
+                                type="button"
+                                onClick={() => setShowSelectProductModalForLine(i)}
+                                style={{ ...C.tdInput, textAlign: 'left', backgroundColor: '#fff', cursor: 'pointer', display: 'block', width: '100%', height: '100%' }}
+                              >
+                                {l.product_id ? (getProductName(l.product_id) || `Producto #${l.product_id}`) : '-- Seleccionar Producto --'}
+                              </button>
+                            ) : (
+                              <span>{getProductName(l.product_id) || '-'}</span>
+                            )}
+                          </td>
+                          <td style={C.td}>
+                            {isEditable ? (
+                              <select style={{ ...C.tdInput, textAlign: 'left', fontSize: '11px' }} value={l.location_id || 0} onChange={e => updLine(i, 'location_id', Number(e.target.value) || undefined)}>
+                                <option value={0}>--</option>
+                                {internalLocs.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                              </select>
+                            ) : (
+                              <span style={{ fontSize: '11px' }}>{internalLocs.find(loc => loc.id === l.location_id)?.name || '-'}</span>
+                            )}
+                          </td>
+                          <td style={{ ...C.td, fontSize: '11px', color: '#64748b' }}>{prodUom || 'Und'}</td>
+                          <td style={C.td}>
+                            {isEditable ? (
+                              <select style={{ ...C.tdInput, textAlign: 'left', fontSize: '11px' }} value={l.tax_type} onChange={e => updLine(i, 'tax_type', e.target.value)}>
+                                {TAX_LINE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                              </select>
+                            ) : (
+                              <span style={{ fontSize: '11px' }}>{TAX_LINE_TYPES.find(t => t.value === l.tax_type)?.label || l.tax_type}</span>
+                            )}
+                          </td>
+                          <td style={C.tdR}>
+                            {isEditable ? (
+                              <input style={C.tdInput} type="number" step="0.01" min="0" value={l.quantity || ''} onChange={e => updLine(i, 'quantity', parseFloat(e.target.value) || 0)} />
+                            ) : <span>{l.quantity}</span>}
+                          </td>
+                          <td style={C.tdR}>
+                            {isEditable ? (
+                              <input style={C.tdInput} type="number" step="0.000001" min="0" value={l.price_unit || ''} onChange={e => updLine(i, 'price_unit', parseFloat(e.target.value) || 0)} />
+                            ) : <span>{fmt(l.price_unit)}</span>}
+                          </td>
+                          <td style={C.tdR}>
+                            {isEditable ? (
+                              <input style={C.tdInput} type="number" step="0.01" min="0" max="100" value={l.discount_percent || ''} onChange={e => updLine(i, 'discount_percent', parseFloat(e.target.value) || 0)} />
+                            ) : <span>{l.discount_percent || 0}%</span>}
+                          </td>
+                          <td style={{ ...C.tdR, fontWeight: 600 }}>${fmt(sub)}</td>
+                          <td style={{ ...C.tdR, fontWeight: 700, color: '#166534' }}>${fmt(pvpTotal)}</td>
+                          {isEditable && (
+                            <td style={C.td}>
+                              {lines.length > 1 && <button style={{ ...C.btnSmall, background: '#dc2626', color: 'white' }} onClick={() => setLines(ls => ls.filter((_, idx) => idx !== i))}>x</button>}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {isEditable && (
+                  <div style={{ padding: '4px 8px', borderTop: '1px solid #e2e8f0' }}>
+                    <button style={{ ...C.btnSmall, background: '#64748b', color: 'white' }} onClick={() => setLines(ls => [...ls, emptyLine()])}>+ Agregar linea</button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ padding: '1rem' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '1rem', color: '#1e293b' }}>Registro de Retención de Cliente</h3>
+                {withholding ? (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                      <div><label style={C.label}>No. Retención</label><input style={C.inputRO} value={withholding.ret_number || '-'} readOnly /></div>
+                      <div><label style={C.label}>Autorización</label><input style={C.inputRO} value={withholding.ret_auth || '-'} readOnly /></div>
+                      <div><label style={C.label}>Retención IR</label><input style={C.inputRO} value={fmt(withholding.valor_ret_renta)} readOnly /></div>
+                      <div><label style={C.label}>Retención IVA</label><input style={C.inputRO} value={fmt(withholding.valor_ret_iva)} readOnly /></div>
+                      <div><label style={C.label}>Estado Contable</label><div style={{ fontSize: '12px', fontWeight: 600, color: withholding.account_move_id ? '#16a34a' : '#ea580c' }}>{withholding.account_move_id ? `Contabilizado (MOVE-${withholding.account_move_id})` : 'Pendiente de Contabilizar'}</div></div>
+                    </div>
+                    {!withholding.account_move_id && (
+                      <button style={{ ...C.btnPrimary, width: 'auto', padding: '8px 16px' }} onClick={handleContabilizarWithholding}>Contabilizar la Retención</button>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                      <div><label style={C.label}>No. Retención *</label><input style={C.input} value={whForm.ret_number} onChange={e => setWhForm({...whForm, ret_number: e.target.value})} placeholder="001-001-123456789" /></div>
+                      <div><label style={C.label}>Autorización *</label><input style={C.input} value={whForm.ret_auth} onChange={e => setWhForm({...whForm, ret_auth: e.target.value})} /></div>
+                      <div><label style={C.label}>Valor Retención Renta</label><input style={C.input} type="number" step="0.01" value={whForm.valor_ret_renta} onChange={e => setWhForm({...whForm, valor_ret_renta: parseFloat(e.target.value)||0})} /></div>
+                      <div><label style={C.label}>Valor Retención IVA</label><input style={C.input} type="number" step="0.01" value={whForm.valor_ret_iva} onChange={e => setWhForm({...whForm, valor_ret_iva: parseFloat(e.target.value)||0})} /></div>
+                    </div>
+                    <button style={{ ...C.btnGreen, width: 'auto', padding: '8px 16px' }} onClick={handleSaveWithholding} disabled={saving}>Guardar Retención</button>
+                  </div>
+                )}
               </div>
             )}
           </div>

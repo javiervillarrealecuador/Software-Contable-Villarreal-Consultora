@@ -23,6 +23,7 @@ export interface ReceivedWithholding {
   valor_ret_iva: number;
   state: 'registered' | 'cancel';
   notes: string | null;
+  account_move_id: number | null;
   created_at: string;
   partner?: { id: number; name: string; vat: string };
   sale?: { id: number; name: string; invoice_ref: string | null };
@@ -40,6 +41,17 @@ export async function getReceivedWithholdings(companyId: number): Promise<Receiv
     .order('date', { ascending: false });
   if (error) throw error;
   return (data || []) as ReceivedWithholding[];
+}
+
+export async function getWithholdingForSale(saleId: number): Promise<ReceivedWithholding | null> {
+  const { data, error } = await supabase
+    .from('sale_received_withholding')
+    .select('*')
+    .eq('sale_order_id', saleId)
+    .eq('state', 'registered')
+    .maybeSingle();
+  if (error) throw error;
+  return data as ReceivedWithholding | null;
 }
 
 export async function createReceivedWithholding(input: {

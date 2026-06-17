@@ -39,6 +39,29 @@ export async function POST(request: Request) {
           errors.push({ id: order.id, name: order.name, error: err.message });
         }
       }
+    } else if (docType === 'received_withholding') {
+      const { data: withholdings, error: whErr } = await supabase
+        .from('sale_received_withholding')
+        .select('id, ret_number')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .is('account_move_id', null)
+        .eq('state', 'registered');
+
+      if (whErr) throw new Error(whErr.message);
+      
+      // Necesitamos importar dinámicamente o añadir la importación arriba.
+      // Ya que no lo tenemos arriba, haremos un import dinamico para evitar modificar la parte superior si es posible, o modificar ambas
+      const { generateReceivedWithholdingEntry } = require('@/lib/received-withholding-accounting');
+
+      for (const wh of withholdings || []) {
+        try {
+          const moveId = await generateReceivedWithholdingEntry(wh.id);
+          results.push({ id: wh.id, name: `Ret. Recibida ${wh.ret_number || '#' + wh.id}`, moveId });
+        } catch (err: any) {
+          errors.push({ id: wh.id, name: `Ret. Recibida ${wh.ret_number || '#' + wh.id}`, error: err.message });
+        }
+      }
     } else if (docType === 'purchase') {
       // Futura implementación para compras
       // const { data: orders } = await supabase.from('purchase_order')...

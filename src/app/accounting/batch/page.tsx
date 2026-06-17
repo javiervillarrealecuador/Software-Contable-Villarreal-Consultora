@@ -49,6 +49,7 @@ export default function BatchAccountingPage() {
               <label className="block text-sm font-bold text-slate-700 mb-1">Tipo de Operación</label>
               <select className="w-full p-2 border border-slate-300 rounded" value={docType} onChange={e => setDocType(e.target.value)}>
                 <option value="sale">Ventas</option>
+                <option value="received_withholding">Retenciones Recibidas (Clientes)</option>
                 <option value="purchase">Compras</option>
               </select>
             </div>
