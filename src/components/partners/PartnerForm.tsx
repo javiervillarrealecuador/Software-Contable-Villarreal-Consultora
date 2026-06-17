@@ -12,7 +12,7 @@ interface PartnerFormProps {
 
 export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) {
   const router = useRouter();
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [, setCompanies] = useState<Company[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 

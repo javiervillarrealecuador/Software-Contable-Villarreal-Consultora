@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { getCompanies, getPartners } from '@/lib/supabase';
 import { createPurchase, PurchaseLine } from '@/lib/purchases';
 import { getProducts, getLocations } from '@/lib/inventory';
 import QuickCreatePartnerModal from '@/components/modals/QuickCreatePartnerModal';
 import QuickCreateProductModal from '@/components/modals/QuickCreateProductModal';
+import SelectPartnerModal from '@/components/modals/SelectPartnerModal';
+import SelectProductModal from '@/components/modals/SelectProductModal';
 
 const S = {
   page: { minHeight: '100vh', background: '#f1f5f9', fontFamily: 'system-ui, sans-serif' } as React.CSSProperties,
@@ -44,6 +46,7 @@ export default function NewPurchasePage() {
   const [products, setProducts] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
 
   // Form State
   const [partnerId, setPartnerId] = useState<number>(0);
@@ -66,9 +69,15 @@ export default function NewPurchasePage() {
   // Modal states
   const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [showProductModalForLine, setShowProductModalForLine] = useState<number | null>(null);
+  const [showSelectPartnerModal, setShowSelectPartnerModal] = useState(false);
+  const [showSelectProductModalForLine, setShowSelectProductModalForLine] = useState<number | null>(null);
 
   async function loadData() {
-    const { data: ps } = await supabase.from('res_partner').select('*').eq('company_id', 1).eq('active', true).order('name');
+    const comps = await getCompanies();
+    const compId = comps.length > 0 ? comps[0].id : 1;
+    setActiveCompanyId(compId);
+
+    const ps = await getPartners(compId);
     setPartners(ps || []);
     const prods = await getProducts();
     setProducts(prods || []);
@@ -123,7 +132,7 @@ export default function NewPurchasePage() {
     try {
       setSaving(true);
       await createPurchase({
-        company_id: 1,
+        company_id: activeCompanyId,
         partner_id: partnerId,
         date_order: dateOrder,
         due_date: dueDate,
@@ -163,15 +172,14 @@ export default function NewPurchasePage() {
             <div style={S.panelTitle}>Datos Proveedor</div>
             <div style={S.grid('1fr 1fr')}>
               <div>
-                <label style={S.label}>Razón Social</label>
-                <select style={S.input} value={partnerId} onChange={e => {
-                  if (e.target.value === 'CREATE_NEW') setShowPartnerModal(true);
-                  else setPartnerId(Number(e.target.value));
-                }}>
-                  <option value={0}>— Seleccionar —</option>
-                  <option value="CREATE_NEW">+ Crear Nuevo Proveedor...</option>
-                  {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <label style={S.label}>Proveedor / Vendedor *</label>
+                <button
+                  type="button"
+                  onClick={() => setShowSelectPartnerModal(true)}
+                  style={{ ...S.input, textAlign: 'left', backgroundColor: '#fff', cursor: 'pointer' }}
+                >
+                  {selectedPartner ? `${selectedPartner.name} ${selectedPartner.identification || selectedPartner.vat ? `(${selectedPartner.identification || selectedPartner.vat})` : ''}` : '-- Seleccionar Proveedor --'}
+                </button>
               </div>
               <div>
                 <label style={S.label}>RUC/Cédula</label>
@@ -241,14 +249,13 @@ export default function NewPurchasePage() {
                     </select>
                   </td>
                   <td style={S.td}>
-                    <select style={S.input} value={l.product_id ?? ''} onChange={e => {
-                      if (e.target.value === 'CREATE_NEW') setShowProductModalForLine(i);
-                      else updLine(i, 'product_id', e.target.value ? Number(e.target.value) : null);
-                    }}>
-                      <option value="">— Seleccionar —</option>
-                      <option value="CREATE_NEW">+ Crear Nuevo Producto...</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowSelectProductModalForLine(i)}
+                      style={{ ...S.input, textAlign: 'left', backgroundColor: '#fff', cursor: 'pointer', display: 'block', width: '100%', height: '100%' }}
+                    >
+                      {l.product_id ? (products.find((p: any) => p.id === l.product_id)?.name || `Producto #${l.product_id}`) : '-- Seleccionar --'}
+                    </button>
                   </td>
                   <td style={S.td}>
                     <input style={S.input} value={l.description || ''} onChange={e => updLine(i, 'description', e.target.value)} />
@@ -353,15 +360,35 @@ export default function NewPurchasePage() {
         </div>
       </main>
 
+      {/* Modals */}
+      {showSelectPartnerModal && (
+        <SelectPartnerModal
+          companyId={activeCompanyId}
+          partners={partners}
+          onSelect={(id, p) => {
+            if (p && !partners.find(x => x.id === id)) {
+              setPartners(prev => [...prev, p]);
+            }
+            setPartnerId(id);
+            setShowSelectPartnerModal(false);
+          }}
+          onCancel={() => setShowSelectPartnerModal(false)}
+          onCreateNew={() => {
+            setShowSelectPartnerModal(false);
+            setShowPartnerModal(true);
+          }}
+        />
+      )}
+
       {showPartnerModal && (
         <QuickCreatePartnerModal
-          companyId={1}
+          companyId={activeCompanyId}
           defaultIsCustomer={false}
           defaultIsSupplier={true}
           onSaved={async (newId) => {
             setShowPartnerModal(false);
-            const { data: ps } = await supabase.from('res_partner').select('*').eq('company_id', 1).eq('active', true).order('name');
-            if (ps) setPartners(ps);
+            const ps = await getPartners(activeCompanyId);
+            setPartners(ps || []);
             setPartnerId(newId);
           }}
           onCancel={() => setShowPartnerModal(false)}
@@ -373,11 +400,38 @@ export default function NewPurchasePage() {
           onSaved={async (newId) => {
             const lineIndex = showProductModalForLine;
             setShowProductModalForLine(null);
-            const prods = await getProducts();
-            if (prods) setProducts(prods);
+            await loadData();
             updLine(lineIndex, 'product_id', newId);
           }}
           onCancel={() => setShowProductModalForLine(null)}
+        />
+      )}
+
+      {showSelectProductModalForLine !== null && (
+        <SelectProductModal
+          products={products}
+          onSelect={(id, p) => {
+            if (p && !products.find((x: any) => x.id === id)) {
+              setProducts((prev: any) => [...prev, p]);
+            }
+            const lineIndex = showSelectProductModalForLine;
+            updLine(lineIndex, 'product_id', id);
+            
+            if (p?.list_price) {
+              updLine(lineIndex, 'price_unit', p.list_price);
+            } else {
+               const exist = products.find((x: any) => x.id === id);
+               if (exist?.list_price) updLine(lineIndex, 'price_unit', exist.list_price);
+            }
+            
+            setShowSelectProductModalForLine(null);
+          }}
+          onCancel={() => setShowSelectProductModalForLine(null)}
+          onCreateNew={() => {
+            const idx = showSelectProductModalForLine;
+            setShowSelectProductModalForLine(null);
+            setShowProductModalForLine(idx);
+          }}
         />
       )}
     </div>

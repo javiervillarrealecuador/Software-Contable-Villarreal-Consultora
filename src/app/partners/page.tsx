@@ -60,7 +60,7 @@ export default function PartnersPage() {
           <p className="text-slate-500 mt-2">Gestión de clientes, proveedores y contactos</p>
         </div>
         <div className="flex gap-4 items-center">
-          <Link href="/partners/new" className="btn btn-primary shadow-lg shadow-blue-500/30">
+          <Link href="/partners/new" className="btn btn-primary">
             + Nuevo Partner
           </Link>
         </div>
@@ -164,3 +164,4 @@ export default function PartnersPage() {
     </div>
   );
 }
+

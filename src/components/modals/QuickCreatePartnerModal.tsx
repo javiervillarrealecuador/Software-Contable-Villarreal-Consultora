@@ -28,7 +28,7 @@ export default function QuickCreatePartnerModal({
     is_company: false,
     is_customer: defaultIsCustomer,
     is_supplier: defaultIsSupplier,
-  });
+  } as PartnerFormData);
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {

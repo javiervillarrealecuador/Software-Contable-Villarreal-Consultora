@@ -57,6 +57,16 @@ export async function updateAccount(id: number, updates: any) {
   return data[0];
 }
 
+export async function deleteAccount(id: number) {
+  const { error } = await supabase
+    .from('account_account')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+  return true;
+}
+
 // ============ DIARIOS ============
 
 export async function getJournals(companyId: number) {

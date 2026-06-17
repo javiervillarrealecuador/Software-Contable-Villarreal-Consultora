@@ -10,16 +10,28 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Funciones helper para operaciones CRUD CAPA 0
 
 // Partners
-export async function getPartners(companyId: number) {
+export async function getPartners(companyId: number, limit = 500) {
   const { data, error } = await supabase
     .from('res_partner')
     .select('*')
     .eq('company_id', companyId)
     .eq('active', true)
-    .order('name');
+    .order('name')
+    .limit(limit);
   
   if (error) throw error;
   return data;
+}
+
+export async function getPartnersCount(companyId: number) {
+  const { count, error } = await supabase
+    .from('res_partner')
+    .select('*', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .eq('active', true);
+  
+  if (error) throw error;
+  return count || 0;
 }
 
 export async function getPartner(id: number) {
@@ -55,7 +67,7 @@ export async function updatePartner(id: number, updates: any) {
 }
 
 // Products
-export async function getProducts(active = true) {
+export async function getProducts(active = true, limit = 500) {
   const { data, error } = await supabase
     .from('product_product')
     .select(`
@@ -66,10 +78,21 @@ export async function getProducts(active = true) {
       )
     `)
     .eq('active', active)
-    .order('id');
+    .order('id')
+    .limit(limit);
   
   if (error) throw error;
   return data;
+}
+
+export async function getProductsCount(active = true) {
+  const { count, error } = await supabase
+    .from('product_product')
+    .select('*', { count: 'exact', head: true })
+    .eq('active', active);
+  
+  if (error) throw error;
+  return count || 0;
 }
 
 export async function createProduct(product: any) {

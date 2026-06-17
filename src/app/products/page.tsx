@@ -3,25 +3,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
+import Link from 'next/link';
 import { getProducts } from '@/lib/supabase';
-import type { Product, ProductFormData } from '@/types/capa0';
+import type { Product } from '@/types/capa0';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-
-  const [formData, setFormData] = useState<ProductFormData>({
-    name: '',
-    category_id: undefined,
-    type: 'product',
-    uom_id: 1,
-    list_price: 0,
-    standard_price: 0,
-    description: '',
-  });
 
   useEffect(() => {
     loadProducts();
@@ -39,49 +28,6 @@ export default function ProductsPage() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    try {
-      // Primero crear product_template
-      const response = await fetch('/api/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) throw new Error('Error creando producto');
-
-      setIsModalOpen(false);
-      setFormData({
-        name: '',
-        category_id: undefined,
-        type: 'product',
-        uom_id: 1,
-        list_price: 0,
-        standard_price: 0,
-        description: '',
-      });
-      loadProducts();
-    } catch (error) {
-      console.error('Error saving product:', error);
-      alert('Error al guardar producto');
-    }
-  }
-
-  function closeModal() {
-    setIsModalOpen(false);
-    setFormData({
-      name: '',
-      category_id: undefined,
-      type: 'product',
-      uom_id: 1,
-      list_price: 0,
-      standard_price: 0,
-      description: '',
-    });
-  }
-
   const filteredProducts = products.filter(p =>
     p.template?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.code?.includes(searchTerm)
@@ -95,9 +41,9 @@ export default function ProductsPage() {
           <p className="text-slate-500 mt-2">Gestión de bienes, servicios y consumibles</p>
         </div>
         <div className="flex gap-4 items-center">
-          <button onClick={() => { closeModal(); setIsModalOpen(true); }} className="btn btn-primary shadow-lg shadow-blue-500/30">
+          <Link href="/products/new" className="btn btn-primary">
             + Nuevo Producto
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -153,120 +99,22 @@ export default function ProductsPage() {
                 <div className="grid grid-cols-2 gap-md pt-md border-t border-slate-200">
                   <div>
                     <p className="text-xs text-slate-600">Precio Lista</p>
-                    <p className="font-bold text-lg">${product.template?.list_price.toFixed(2)}</p>
+                    <p className="font-bold text-lg">${product.template?.list_price?.toFixed(2) || '0.00'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-600">Costo</p>
-                    <p className="font-bold text-lg">${product.template?.standard_price.toFixed(2)}</p>
+                    <p className="font-bold text-lg">${product.template?.standard_price?.toFixed(2) || '0.00'}</p>
                   </div>
                 </div>
 
-                <button className="btn btn-outline w-full mt-lg">
+                <Link href={`/products/${product.id}`} className="btn btn-outline w-full mt-lg block text-center">
                   ✏️ Editar
-                </button>
+                </Link>
               </div>
             ))
           )}
         </div>
       </main>
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-md">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-xl">
-            <h2 className="mb-lg">Nuevo Producto</h2>
-
-            <form onSubmit={handleSubmit} className="space-y-lg">
-              <div>
-                <label className="block text-sm font-semibold mb-sm">Nombre *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
-                <div>
-                  <label className="block text-sm font-semibold mb-sm">Tipo</label>
-                  <select
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                    className="w-full"
-                  >
-                    <option value="product">Producto</option>
-                    <option value="service">Servicio</option>
-                    <option value="consu">Consumible</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-sm">Unidad de Medida</label>
-                  <select
-                    value={formData.uom_id}
-                    onChange={(e) => setFormData({ ...formData, uom_id: Number(e.target.value) })}
-                    className="w-full"
-                  >
-                    <option value={1}>Unidad</option>
-                    <option value={2}>Kilogramo</option>
-                    <option value={3}>Litro</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
-                <div>
-                  <label className="block text-sm font-semibold mb-sm">Precio Lista *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={formData.list_price}
-                    onChange={(e) => setFormData({ ...formData, list_price: parseFloat(e.target.value) })}
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-sm">Costo Estándar</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.standard_price}
-                    onChange={(e) => setFormData({ ...formData, standard_price: parseFloat(e.target.value) })}
-                    className="w-full"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold mb-sm">Descripción</label>
-                <textarea
-                  value={formData.description || ''}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="flex gap-md pt-lg border-t border-slate-200">
-                <button type="submit" className="btn btn-primary flex-1">
-                  Crear Producto
-                </button>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="btn btn-outline flex-1"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

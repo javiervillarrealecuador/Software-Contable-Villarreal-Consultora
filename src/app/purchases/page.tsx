@@ -133,7 +133,7 @@ export default function PurchasesPage() {
           <p className="text-slate-500 mt-2">Gestión de órdenes y facturas de compra</p>
         </div>
         <div className="flex gap-4 items-center">
-          <Link href="/purchases/new" className="btn btn-primary shadow-lg shadow-blue-500/30">+ Nueva Compra</Link>
+          <Link href="/purchases/new" className="btn btn-primary">+ Nueva Compra</Link>
         </div>
       </header>
 
@@ -295,3 +295,4 @@ export default function PurchasesPage() {
     </div>
   );
 }
+

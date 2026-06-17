@@ -178,7 +178,7 @@ export async function POST(request: Request) {
       .select(`
         id, name, date_order, invoice_ref, invoice_auth, state, company_id,
         amount_untaxed, amount_tax, amount_total, sri_ambiente, sri_autorizacion, sri_fecha_aut,
-        partner:res_partner(id, name, vat, city, email),
+        partner:res_partner!sale_order_partner_id_fkey(id, name, vat, city, email),
         lines:sale_order_line(
           quantity, price_unit, iva_rate, price_subtotal,
           product:product_product(id, code, template:product_template(name))

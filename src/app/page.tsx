@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getCompanies, getPartners, getProducts } from '@/lib/supabase';
+import { getCompanies, getPartnersCount, getProductsCount } from '@/lib/supabase';
 import type { Company } from '@/types/capa0';
 
 
@@ -29,12 +29,15 @@ export default function Dashboard() {
       
       if (comps.length > 0) {
         setSelectedCompany(comps[0]);
-        const partners = await getPartners(comps[0].id);
-        const products = await getProducts();
+        
+        const [partnersCount, productsCount] = await Promise.all([
+          getPartnersCount(comps[0].id),
+          getProductsCount()
+        ]);
         
         setStats({
-          partners: partners?.length || 0,
-          products: products?.length || 0,
+          partners: partnersCount,
+          products: productsCount,
         });
       }
     } catch (error) {

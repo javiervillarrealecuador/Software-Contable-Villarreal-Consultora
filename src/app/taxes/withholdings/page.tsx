@@ -157,7 +157,7 @@ export default function WithholdingsPage() {
           <Link href="/taxes/rules" className="btn btn-outline">Reglas Fiscales</Link>
           <Link href="/taxes/received-withholdings" className="btn btn-outline">Ret. recibidas</Link>
           <Link href="/taxes/ats" className="btn btn-outline">Anexo ATS</Link>
-          <button className="btn btn-primary shadow-lg shadow-blue-500/30" onClick={() => setModalOpen(true)}>+ Nueva Retención</button>
+          <button className="btn btn-primary" onClick={() => setModalOpen(true)}>+ Nueva Retención</button>
         </div>
       </header>
 
@@ -303,3 +303,4 @@ export default function WithholdingsPage() {
     </div>
   );
 }
+

@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getCompanies } from '@/lib/supabase';
-import { getAccounts, getAccountTypes, createAccount } from '@/lib/accounting';
+import { getAccounts, getAccountTypes, createAccount, updateAccount, deleteAccount } from '@/lib/accounting';
 import type { Company } from '@/types/capa0';
 import type { Account, AccountType, AccountFormData } from '@/types/capa1';
 
@@ -29,6 +29,7 @@ export default function AccountingPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
 
   const [form, setForm] = useState<AccountFormData>({
     code: '', name: '', account_type_id: 0, reconcile: false, is_group: false,
@@ -58,16 +59,49 @@ export default function AccountingPage() {
     finally { setLoading(false); }
   }
 
+  function openNew() {
+    setForm({ code: '', name: '', account_type_id: accountTypes[0]?.id || 0, reconcile: false, is_group: false });
+    setEditId(null);
+    setModalOpen(true);
+  }
+
+  function handleEdit(acc: Account) {
+    setForm({
+      code: acc.code,
+      name: acc.name,
+      account_type_id: acc.account_type_id,
+      reconcile: acc.reconcile,
+      is_group: acc.is_group,
+    });
+    setEditId(acc.id);
+    setModalOpen(true);
+  }
+
+  async function handleDelete(id: number, name: string) {
+    if (!confirm(`¿Estás seguro de eliminar la cuenta ${name}?`)) return;
+    try {
+      await deleteAccount(id);
+      loadAccounts();
+    } catch (err: any) {
+      alert('Error: ' + (err.message || 'No se pudo eliminar. Puede tener movimientos asociados.'));
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!companyId) return;
     try {
-      await createAccount({ ...form, company_id: companyId });
+      if (editId) {
+        await updateAccount(editId, form);
+      } else {
+        await createAccount({ ...form, company_id: companyId });
+      }
       setModalOpen(false);
       setForm({ code: '', name: '', account_type_id: accountTypes[0]?.id || 0, reconcile: false, is_group: false });
+      setEditId(null);
       loadAccounts();
     } catch (err: any) {
-      alert('Error: ' + (err.message || 'No se pudo crear la cuenta'));
+      alert('Error: ' + (err.message || 'No se pudo guardar la cuenta'));
     }
   }
 
@@ -88,8 +122,9 @@ export default function AccountingPage() {
           <p className="text-slate-500 mt-2">Gestión del catálogo contable</p>
         </div>
         <div className="flex gap-4 items-center">
+          <Link href="/accounting/batch" className="btn btn-ghost bg-indigo-50 text-indigo-700">⚡ Contabilización Masiva</Link>
           <Link href="/accounting/moves" className="btn btn-ghost">Ver Asientos Contables →</Link>
-          <button className="btn btn-primary shadow-lg shadow-blue-500/30" onClick={() => setModalOpen(true)}>+ Nueva Cuenta</button>
+          <button className="btn btn-primary" onClick={openNew}>+ Nueva Cuenta</button>
         </div>
       </header>
 
@@ -119,6 +154,7 @@ export default function AccountingPage() {
                   <th style={S.th}>Nombre</th>
                   <th style={S.th}>Tipo</th>
                   <th style={S.th}>Conciliable</th>
+                  <th style={S.th}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,6 +170,10 @@ export default function AccountingPage() {
                       </span>
                     </td>
                     <td style={S.td}>{acc.reconcile ? '✓' : ''}</td>
+                    <td style={S.td}>
+                      <button onClick={() => handleEdit(acc)} style={{...S.btnGhost, color: '#2563eb'}}>Editar</button>
+                      <button onClick={() => handleDelete(acc.id, acc.name)} style={{...S.btnGhost, color: '#ef4444'}}>Eliminar</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -145,7 +185,7 @@ export default function AccountingPage() {
       {modalOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: '1rem' }}>
           <div style={{ background: 'white', borderRadius: '0.75rem', padding: '2rem', width: '100%', maxWidth: '500px' }}>
-            <h2 style={{ marginBottom: '1.5rem', color: '#1e293b' }}>Nueva Cuenta</h2>
+            <h2 style={{ marginBottom: '1.5rem', color: '#1e293b' }}>{editId ? 'Editar Cuenta' : 'Nueva Cuenta'}</h2>
             <form onSubmit={handleSubmit}>
               <div style={{ display: 'grid', gap: '1rem' }}>
                 <div>
@@ -174,7 +214,7 @@ export default function AccountingPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button type="submit" style={{ ...S.btn, flex: 1 }}>Crear Cuenta</button>
+                <button type="submit" style={{ ...S.btn, flex: 1 }}>{editId ? 'Guardar Cambios' : 'Crear Cuenta'}</button>
                 <button type="button" style={{ ...S.btn, flex: 1, background: '#e2e8f0', color: '#334155' }} onClick={() => setModalOpen(false)}>Cancelar</button>
               </div>
             </form>
@@ -184,3 +224,4 @@ export default function AccountingPage() {
     </div>
   );
 }
+

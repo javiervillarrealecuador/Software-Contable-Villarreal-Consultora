@@ -133,7 +133,7 @@ export default function SettingsPage() {
         <div className="flex gap-4 items-center">
           <Link href="/settings/users" className="btn btn-outline">Gestión de Usuarios</Link>
           {saved && <span className="text-green-700 font-semibold text-sm bg-green-100 px-3 py-1 rounded-full">✓ Guardado</span>}
-          <button className="btn btn-primary shadow-lg shadow-blue-500/30" onClick={handleSave} disabled={saving}>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </button>
         </div>
@@ -352,3 +352,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+

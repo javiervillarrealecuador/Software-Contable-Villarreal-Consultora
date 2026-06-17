@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { getCompanies, getPartners } from '@/lib/supabase';
 import {
   getSaleOrders, getSaleOrder, createSale, updateSale, deliverSale, cancelSale,
   calcTotals, PAYMENT_TERMS, TAX_LINE_TYPES, FORMAS_PAGO_SRI,
@@ -17,6 +17,8 @@ import { generateFacturaForSale, downloadFacturaXml, sendSaleToSri } from '@/lib
 import { emitNotaCreditoForSale, emitNotaDebitoForSale, emitGuiaRemisionForSale, downloadXmlFile } from '@/lib/sri-docs-db';
 import QuickCreatePartnerModal from '@/components/modals/QuickCreatePartnerModal';
 import QuickCreateProductModal from '@/components/modals/QuickCreateProductModal';
+import SelectPartnerModal from '@/components/modals/SelectPartnerModal';
+import SelectProductModal from '@/components/modals/SelectProductModal';
 
 const RidePdfButton = dynamic(() => import('@/components/RidePdfButton'), { ssr: false });
 
@@ -73,6 +75,7 @@ export default function SalesPage() {
 
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [currentOrder, setCurrentOrder] = useState<any>(null);
+  const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
 
   // Form fields - cabecera
   const [docName, setDocName] = useState('NUEVO');
@@ -92,6 +95,8 @@ export default function SalesPage() {
   // Modal states
   const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [showProductModalForLine, setShowProductModalForLine] = useState<number | null>(null);
+  const [showSelectPartnerModal, setShowSelectPartnerModal] = useState(false);
+  const [showSelectProductModalForLine, setShowSelectProductModalForLine] = useState<number | null>(null);
 
   const isEditable = docState === 'draft' || !currentId;
 
@@ -99,17 +104,21 @@ export default function SalesPage() {
 
   async function loadAll() {
     try {
+      const comps = await getCompanies();
+      const compId = comps.length > 0 ? comps[0].id : 1;
+      setActiveCompanyId(compId);
+
       const [ps, prods, locs, ords] = await Promise.all([
-        supabase.from('res_partner').select('id, name, vat, phone, street, city, taxpayer_type').eq('company_id', 1).eq('active', true).order('name'),
+        getPartners(compId),
         getProducts(),
         getLocations(),
-        getSaleOrders(1),
+        getSaleOrders(compId),
       ]);
-      setPartners(ps.data || []);
+      setPartners(ps || []);
       setProducts(prods || []);
       setLocations(locs || []);
       setOrders(ords || []);
-      setSellers(ps.data || []);
+      setSellers(ps || []);
     } catch (e) { console.error('load error:', e); }
   }
 
@@ -202,7 +211,7 @@ export default function SalesPage() {
     try {
       setSaving(true);
       const input = {
-        company_id: 1, partner_id: partnerId, date_order: date,
+        company_id: activeCompanyId, partner_id: partnerId, date_order: date,
         invoice_ref: invoiceRef || undefined, invoice_auth: invoiceAuth || undefined,
         seller_id: sellerId || undefined, payment_term: paymentTerm,
         forma_pago: formaPago,
@@ -354,6 +363,59 @@ export default function SalesPage() {
     return p?.uom_id || '';
   };
 
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [accountingStatus, setAccountingStatus] = useState<string>('');
+
+  const handleToggleSelect = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleContabilizarMasivo = async () => {
+    if (selectedIds.length === 0) return alert('Seleccione al menos una venta');
+    setAccountingStatus('Procesando...');
+    try {
+      const res = await fetch('/api/accounting/sale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: selectedIds })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      alert(`Contabilización masiva completa. Errores: ${data.errors.length}`);
+      setSelectedIds([]);
+      loadAll();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      setAccountingStatus('');
+    }
+  };
+
+  const handleContabilizarIndividual = async () => {
+    if (!currentId) return;
+    setAccountingStatus('Procesando...');
+    try {
+      const res = await fetch('/api/accounting/sale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: [currentId] })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      const errs = data.errors || [];
+      if (errs.length > 0) {
+        alert('Error: ' + errs[0].error);
+      } else {
+        alert('Contabilizado con éxito. Asiento: MOVE-' + data.results[0].moveId);
+        loadCurrent(currentId);
+      }
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      setAccountingStatus('');
+    }
+  };
+
   // === LIST MODE ===
   if (mode === 'list') {
     return (
@@ -367,7 +429,7 @@ export default function SalesPage() {
             </p>
           </div>
           <div className="flex gap-4 items-center">
-            <button className="btn btn-primary shadow-lg shadow-blue-500/30" onClick={handleNew}>+ Nueva Venta</button>
+            <button className="btn btn-primary" onClick={handleNew}>+ Nueva Venta</button>
           </div>
         </header>
         <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1rem' }}>
@@ -379,7 +441,7 @@ export default function SalesPage() {
                 <thead>
                   <tr>
                     <th style={C.th}>Numero</th><th style={C.th}>Fecha</th><th style={C.th}>Cliente</th>
-                    <th style={C.th}>Factura</th><th style={C.th}>Tipo Pago</th><th style={C.th}>Forma Pago</th>
+                    <th style={C.th}>Factura</th><th style={C.th}>Asiento</th><th style={C.th}>Tipo Pago</th><th style={C.th}>Forma Pago</th>
                     <th style={C.thR}>Subtotal</th><th style={C.thR}>IVA</th><th style={C.thR}>Total</th>
                     <th style={C.th}>Estado</th><th style={C.th}></th>
                   </tr>
@@ -391,6 +453,8 @@ export default function SalesPage() {
                       <td style={C.td}>{o.date_order}</td>
                       <td style={C.td}>{o.partner?.name || '-'}</td>
                       <td style={{ ...C.td, fontFamily: 'monospace', fontSize: '11px' }}>{o.invoice_ref || '-'}</td>
+                      <td style={{ ...C.td, fontFamily: 'monospace', fontSize: '11px', color: '#16a34a' }}>{o.account_move_id ? `MOVE-${o.account_move_id}` : '-'}</td>
+
                       <td style={C.td}>{PAYMENT_TERMS.find(t => t.value === o.payment_term)?.label || o.payment_term || 'Contado'}</td>
                       <td style={{ ...C.td, fontSize: '11px' }}>{FORMAS_PAGO_SRI.find(f => f.value === o.forma_pago)?.label || o.forma_pago || '-'}</td>
                       <td style={C.tdR}>${fmt(Number(o.amount_untaxed))}</td>
@@ -464,14 +528,17 @@ export default function SalesPage() {
             </div>
             <div style={{ gridColumn: 'span 2' }}>
               <label style={C.label}>Cliente *</label>
-              <select style={isEditable ? C.select : C.inputRO} value={partnerId} onChange={e => {
-                if (e.target.value === 'CREATE_NEW') setShowPartnerModal(true);
-                else setPartnerId(Number(e.target.value));
-              }} disabled={!isEditable}>
-                <option value={0}>-- Seleccionar --</option>
-                {isEditable && <option value="CREATE_NEW">+ Crear Nuevo Cliente...</option>}
-                {partners.map(p => <option key={p.id} value={p.id}>{p.name} {p.vat ? '(' + p.vat + ')' : ''}</option>)}
-              </select>
+              {isEditable ? (
+                <button
+                  type="button"
+                  onClick={() => setShowSelectPartnerModal(true)}
+                  style={{ ...C.select, textAlign: 'left', backgroundColor: '#fff', cursor: 'pointer' }}
+                >
+                  {selectedPartner ? `${selectedPartner.name} ${selectedPartner.vat ? `(${selectedPartner.vat})` : ''}` : '-- Seleccionar Cliente --'}
+                </button>
+              ) : (
+                <div style={C.inputRO}>{selectedPartner ? selectedPartner.name : '--'}</div>
+              )}
             </div>
             <div>
               <label style={C.label}>Direccion</label>
@@ -557,14 +624,13 @@ export default function SalesPage() {
                       <td style={{ ...C.td, fontFamily: 'monospace', fontSize: '11px' }}>{prodCode || '-'}</td>
                       <td style={C.td}>
                         {isEditable ? (
-                          <select style={{ ...C.tdInput, textAlign: 'left' }} value={l.product_id} onChange={e => {
-                            if (e.target.value === 'CREATE_NEW') setShowProductModalForLine(i);
-                            else updLine(i, 'product_id', Number(e.target.value));
-                          }}>
-                            <option value={0}>-- Producto --</option>
-                            <option value="CREATE_NEW">+ Crear Nuevo Producto...</option>
-                            {products.map((p: any) => <option key={p.id} value={p.id}>{p.code ? '[' + p.code + '] ' : ''}{p.name}{p.list_price > 0 ? ' ($' + Number(p.list_price).toFixed(2) + ')' : ''}</option>)}
-                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setShowSelectProductModalForLine(i)}
+                            style={{ ...C.tdInput, textAlign: 'left', backgroundColor: '#fff', cursor: 'pointer', display: 'block', width: '100%', height: '100%' }}
+                          >
+                            {l.product_id ? (getProductName(l.product_id) || `Producto #${l.product_id}`) : '-- Seleccionar Producto --'}
+                          </button>
                         ) : (
                           <span>{getProductName(l.product_id) || '-'}</span>
                         )}
@@ -705,6 +771,22 @@ export default function SalesPage() {
             <>
               <hr style={{ border: 'none', borderTop: '1px solid #94a3b8', margin: '4px 0' }} />
               <Link href="/cxc" style={{ ...C.btnSide, textDecoration: 'none', display: 'block', textAlign: 'center' }}>Ver CxC</Link>
+              
+              <hr style={{ margin: '1rem 0', borderColor: '#d1d9e0' }} />
+              
+              {currentOrder?.account_move_id ? (
+                <div style={{ textAlign: 'center', fontSize: '12px', padding: '0.5rem', background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', borderRadius: '4px' }}>
+                  Contabilizado (Asiento: {currentOrder.account_move_id})
+                </div>
+              ) : (
+                <button 
+                  style={{ ...C.btnSide, background: '#f59e0b', color: 'white', borderColor: '#d97706' }} 
+                  onClick={handleContabilizarIndividual}
+                  disabled={!currentId || !!accountingStatus}
+                >
+                  {accountingStatus ? 'Procesando...' : 'Contabilizar'}
+                </button>
+              )}
             </>
           )}
 
@@ -726,9 +808,28 @@ export default function SalesPage() {
         </div>
       </div>
 
+      {showSelectPartnerModal && (
+        <SelectPartnerModal
+          companyId={activeCompanyId}
+          partners={partners}
+          onSelect={(id, p) => {
+            if (p && !partners.find(x => x.id === id)) {
+              setPartners(prev => [...prev, p]);
+            }
+            setPartnerId(id);
+            setShowSelectPartnerModal(false);
+          }}
+          onCancel={() => setShowSelectPartnerModal(false)}
+          onCreateNew={() => {
+            setShowSelectPartnerModal(false);
+            setShowPartnerModal(true);
+          }}
+        />
+      )}
+
       {showPartnerModal && (
         <QuickCreatePartnerModal
-          companyId={1}
+          companyId={activeCompanyId}
           defaultIsCustomer={true}
           defaultIsSupplier={false}
           onSaved={async (newId) => {
@@ -751,6 +852,35 @@ export default function SalesPage() {
           onCancel={() => setShowProductModalForLine(null)}
         />
       )}
+
+      {showSelectProductModalForLine !== null && (
+        <SelectProductModal
+          products={products}
+          onSelect={(id, p) => {
+            if (p && !products.find((x: any) => x.id === id)) {
+              setProducts((prev: any) => [...prev, p]);
+            }
+            const lineIndex = showSelectProductModalForLine;
+            updLine(lineIndex, 'product_id', id);
+            
+            if (p?.list_price) {
+              updLine(lineIndex, 'price_unit', p.list_price);
+            } else {
+               const exist = products.find((x: any) => x.id === id);
+               if (exist?.list_price) updLine(lineIndex, 'price_unit', exist.list_price);
+            }
+            
+            setShowSelectProductModalForLine(null);
+          }}
+          onCancel={() => setShowSelectProductModalForLine(null)}
+          onCreateNew={() => {
+            const idx = showSelectProductModalForLine;
+            setShowSelectProductModalForLine(null);
+            setShowProductModalForLine(idx);
+          }}
+        />
+      )}
     </div>
   );
 }
+

@@ -120,7 +120,7 @@ export default function ReceivedWithholdingsPage() {
         <div className="flex gap-4 items-center">
           <Link href="/taxes/withholdings" className="btn btn-outline">Ret. emitidas</Link>
           <Link href="/taxes/ats" className="btn btn-outline">Anexo ATS</Link>
-          <button className="btn btn-primary shadow-lg shadow-blue-500/30" onClick={() => setModalOpen(true)}>+ Registrar retención recibida</button>
+          <button className="btn btn-primary" onClick={() => setModalOpen(true)}>+ Registrar retención recibida</button>
         </div>
       </header>
 
@@ -270,3 +270,4 @@ export default function ReceivedWithholdingsPage() {
     </div>
   );
 }
+

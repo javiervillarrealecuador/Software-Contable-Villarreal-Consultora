@@ -84,7 +84,7 @@ export default function InventoryPage() {
           <p className="text-slate-500 mt-2">Control de existencias y valoración por promedio ponderado</p>
         </div>
         <div className="flex gap-4 items-center">
-          <button className="btn btn-primary shadow-lg shadow-blue-500/30" onClick={() => setAdjOpen(true)}>+ Ajuste / Saldo Inicial</button>
+          <button className="btn btn-primary" onClick={() => setAdjOpen(true)}>+ Ajuste / Saldo Inicial</button>
         </div>
       </header>
 
@@ -173,3 +173,4 @@ export default function InventoryPage() {
     </div>
   );
 }
+

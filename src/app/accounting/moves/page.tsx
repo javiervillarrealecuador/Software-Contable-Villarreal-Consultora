@@ -125,7 +125,7 @@ export default function MovesPage() {
           <p className="text-slate-500 mt-2">Libro diario y movimientos financieros</p>
         </div>
         <div className="flex gap-4 items-center">
-          <button className="btn btn-primary shadow-lg shadow-blue-500/30" onClick={() => setModalOpen(true)}>+ Nuevo Asiento</button>
+          <button className="btn btn-primary" onClick={() => setModalOpen(true)}>+ Nuevo Asiento</button>
         </div>
       </header>
 
@@ -262,3 +262,4 @@ export default function MovesPage() {
     </div>
   );
 }
+

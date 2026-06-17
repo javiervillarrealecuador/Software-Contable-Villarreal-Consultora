@@ -39,7 +39,7 @@ export default function UsersPage() {
     setLoading(true);
     
     // Load Users
-    const { data: usersData, error: usersError } = await supabase.from('res_users').select('*').order('id');
+    const { data: usersData, error: usersError } = await supabase.from('res_users').select('id, name, email, role, active, company_ids').order('id');
     if (!usersError && usersData) {
       setUsers(usersData);
     }

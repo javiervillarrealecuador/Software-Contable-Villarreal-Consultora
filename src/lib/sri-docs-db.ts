@@ -117,7 +117,7 @@ export async function emitNotaCreditoForSale(saleId: number, motivo = 'DEVOLUCIO
     .select(`
       id, name, date_order, invoice_ref, company_id, state, partner_id,
       amount_untaxed, amount_tax, amount_total, cost_total, nc_clave_acceso,
-      partner:res_partner(name, vat),
+      partner:res_partner!sale_order_partner_id_fkey(name, vat),
       lines:sale_order_line(quantity, price_unit, iva_rate, cost_unit, product:product_product(id, code, template:product_template(name)))
     `)
     .eq('id', saleId)
@@ -206,7 +206,7 @@ export async function emitNotaCreditoForSale(saleId: number, motivo = 'DEVOLUCIO
 export async function emitNotaDebitoForSale(saleId: number, razon: string, valor: number): Promise<SriDocSendResult> {
   const { data: sale, error } = await supabase
     .from('sale_order')
-    .select(`id, date_order, invoice_ref, company_id, partner_id, partner:res_partner(name, vat)`)
+    .select(`id, date_order, invoice_ref, company_id, partner_id, partner:res_partner!sale_order_partner_id_fkey(name, vat)`)
     .eq('id', saleId)
     .single();
   if (error) throw error;
@@ -379,7 +379,7 @@ export async function emitGuiaRemisionForSale(
     .from('sale_order')
     .select(`
       id, date_order, invoice_ref, invoice_auth, company_id,
-      partner:res_partner(name, vat, city),
+      partner:res_partner!sale_order_partner_id_fkey(name, vat, city),
       lines:sale_order_line(quantity, product:product_product(id, code, template:product_template(name)))
     `)
     .eq('id', saleId)

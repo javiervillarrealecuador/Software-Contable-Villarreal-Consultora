@@ -92,6 +92,10 @@ export interface Partner {
   bank_account_number?: string;
   bank_account_id_number?: string;
 
+  // Accounting integration
+  property_account_receivable_id?: number;
+  property_account_payable_id?: number;
+
   created_at: string;
   updated_at: string;
   created_uid?: number;
@@ -144,6 +148,11 @@ export interface ProductTemplate {
   description?: string;
   list_price: number;
   standard_price: number;
+  
+  // Accounting integration
+  income_account_id?: number;
+  expense_account_id?: number;
+
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -260,9 +269,30 @@ export interface PartnerFormData {
   bank_account_type?: string;
   bank_account_number?: string;
   bank_account_id_number?: string;
+
+  // Accounting integration
+  property_account_receivable_id?: number;
+  property_account_payable_id?: number;
+}
+
+export interface ProductPresentation {
+  id?: number;
+  product_tmpl_id?: number;
+  name: string;
+  barcode?: string;
+  gross_weight: number;
+  weight_unit?: string;
+  price_1: number;
+  price_2: number;
+  price_3: number;
+  price_4: number;
+  price_5: number;
+  price_6: number;
 }
 
 export interface ProductFormData {
+  id?: number;
+  tmpl_id?: number;
   name: string;
   category_id?: number;
   type: 'product' | 'service' | 'consu';
@@ -270,6 +300,38 @@ export interface ProductFormData {
   list_price: number;
   standard_price: number;
   description?: string;
+  
+  // Advanced Fields
+  reference?: string;
+  group1?: string;
+  group2?: string;
+  group3?: string;
+  stock_unit?: string;
+  min_stock?: number;
+  max_stock?: number;
+  cost_center?: string;
+  iva_code?: string;
+  has_ice?: boolean;
+  ice_percentage?: number;
+  price_1?: number;
+  price_2?: number;
+  price_3?: number;
+  price_4?: number;
+  price_5?: number;
+  price_6?: number;
+  discount_percentage?: number;
+  previous_price?: number;
+  promo_quantity?: number;
+  promo_valid_until?: string;
+  warehouse_location?: string;
+  
+  // Accounting integration
+  income_account_id?: number;
+  expense_account_id?: number;
+
+  active?: boolean;
+  
+  presentations?: ProductPresentation[];
 }
 
 export interface CompanyFormData {
