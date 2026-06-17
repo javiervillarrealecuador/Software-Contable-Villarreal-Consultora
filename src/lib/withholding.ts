@@ -87,6 +87,47 @@ export async function setIvaRuleAccount(companyId: number, ivaRuleId: number, ac
   }
 }
 
+export async function setRentRulesAccountBulk(companyId: number, rentRuleIds: number[], accountId: number | null) {
+  if (rentRuleIds.length === 0) return;
+  if (!accountId) {
+    const { error } = await supabase.from('company_rent_rule_account')
+      .delete()
+      .eq('company_id', companyId)
+      .in('rent_rule_id', rentRuleIds);
+    if (error) throw error;
+  } else {
+    const rows = rentRuleIds.map(ruleId => ({
+      company_id: companyId,
+      rent_rule_id: ruleId,
+      account_id: accountId
+    }));
+    const { error } = await supabase.from('company_rent_rule_account')
+      .upsert(rows, { onConflict: 'company_id, rent_rule_id' });
+    if (error) throw error;
+  }
+}
+
+export async function setIvaRulesAccountBulk(companyId: number, ivaRuleIds: number[], accountId: number | null) {
+  if (ivaRuleIds.length === 0) return;
+  if (!accountId) {
+    const { error } = await supabase.from('company_iva_rule_account')
+      .delete()
+      .eq('company_id', companyId)
+      .in('iva_rule_id', ivaRuleIds);
+    if (error) throw error;
+  } else {
+    const rows = ivaRuleIds.map(ruleId => ({
+      company_id: companyId,
+      iva_rule_id: ruleId,
+      account_id: accountId
+    }));
+    const { error } = await supabase.from('company_iva_rule_account')
+      .upsert(rows, { onConflict: 'company_id, iva_rule_id' });
+    if (error) throw error;
+  }
+}
+
+
 // ============ MOTOR DE CALCULO ============
 
 /**
