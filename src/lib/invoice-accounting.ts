@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { isMoveBalanced, MoveLineInput } from '@/types/capa1';
+import { MoveLineInput } from '@/types/capa1';
 
 /**
  * Genera un asiento contable (Move) para una factura de venta (sale_order)
