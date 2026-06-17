@@ -363,33 +363,7 @@ export default function SalesPage() {
     return p?.uom_id || '';
   };
 
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [accountingStatus, setAccountingStatus] = useState<string>('');
-
-  const handleToggleSelect = (id: number) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
-  const handleContabilizarMasivo = async () => {
-    if (selectedIds.length === 0) return alert('Seleccione al menos una venta');
-    setAccountingStatus('Procesando...');
-    try {
-      const res = await fetch('/api/accounting/sale', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderIds: selectedIds })
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      alert(`Contabilización masiva completa. Errores: ${data.errors.length}`);
-      setSelectedIds([]);
-      loadAll();
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    } finally {
-      setAccountingStatus('');
-    }
-  };
 
   const handleContabilizarIndividual = async () => {
     if (!currentId) return;
