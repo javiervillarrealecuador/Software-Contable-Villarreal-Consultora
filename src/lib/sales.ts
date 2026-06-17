@@ -397,7 +397,10 @@ export async function deliverSale(orderId: number) {
     .select(''
       + 'id, company_id, state, date_order, name, partner_id, invoice_ref,'
       + 'amount_untaxed, amount_tax, amount_total, warehouse_id,'
-      + 'lines:sale_order_line(id, product_id, quantity, qty_delivered, location_id)'
+      + 'lines:sale_order_line('
+      +   'id, product_id, quantity, qty_delivered, location_id,'
+      +   'product:product_product(id, template:product_template(type))'
+      + ')'
     )
     .eq('id', orderId)
     .single();
@@ -413,6 +416,9 @@ export async function deliverSale(orderId: number) {
 
   const costByLine: Record<number, number> = {};
   for (const line of orderAny.lines || []) {
+    const isService = (line.product as any)?.template?.type === 'service';
+    if (isService) continue;
+
     const pending = line.quantity - (line.qty_delivered || 0);
     if (pending <= 0) continue;
 
@@ -437,6 +443,16 @@ export async function deliverSale(orderId: number) {
   let costTotal = 0;
 
   for (const line of orderAny.lines || []) {
+    const isService = (line.product as any)?.template?.type === 'service';
+    if (isService) {
+      const { error: lineErr } = await supabase
+        .from('sale_order_line')
+        .update({ qty_delivered: line.quantity, cost_unit: 0 })
+        .eq('id', line.id);
+      if (lineErr) throw lineErr;
+      continue;
+    }
+
     const pending = line.quantity - (line.qty_delivered || 0);
     if (pending <= 0) continue;
 

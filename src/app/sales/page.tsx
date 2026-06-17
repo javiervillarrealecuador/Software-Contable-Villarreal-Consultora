@@ -724,6 +724,8 @@ export default function SalesPage() {
                       const pvpTotal = round2(sub + iva + (l.ice_amount || 0));
                       const prodCode = getProductCode(l.product_id);
                       const prodUom = getProductUom(l.product_id);
+                      const prod = products.find((p: any) => p.id === l.product_id);
+                      const isService = prod?.type === 'service';
                       return (
                         <tr key={i}>
                           <td style={{ ...C.td, textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>{i + 1}</td>
@@ -743,12 +745,23 @@ export default function SalesPage() {
                           </td>
                           <td style={C.td}>
                             {isEditable ? (
-                              <select style={{ ...C.tdInput, textAlign: 'left', fontSize: '11px' }} value={l.location_id || 0} onChange={e => updLine(i, 'location_id', Number(e.target.value) || undefined)}>
-                                <option value={0}>--</option>
-                                {internalLocs.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                              <select 
+                                disabled={isService} 
+                                style={{ ...C.tdInput, textAlign: 'left', fontSize: '11px', backgroundColor: isService ? '#f1f5f9' : '#fff', color: isService ? '#94a3b8' : '#000' }} 
+                                value={isService ? 0 : (l.location_id || 0)} 
+                                onChange={e => updLine(i, 'location_id', Number(e.target.value) || undefined)}
+                              >
+                                {isService ? (
+                                  <option value={0}>N/A (Servicio)</option>
+                                ) : (
+                                  <>
+                                    <option value={0}>--</option>
+                                    {internalLocs.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                                  </>
+                                )}
                               </select>
                             ) : (
-                              <span style={{ fontSize: '11px' }}>{internalLocs.find(loc => loc.id === l.location_id)?.name || '-'}</span>
+                              <span style={{ fontSize: '11px' }}>{isService ? 'N/A (Servicio)' : (internalLocs.find(loc => loc.id === l.location_id)?.name || '-')}</span>
                             )}
                           </td>
                           <td style={{ ...C.td, fontSize: '11px', color: '#64748b' }}>{prodUom || 'Und'}</td>
@@ -1070,6 +1083,11 @@ export default function SalesPage() {
             }
             const lineIndex = showSelectProductModalForLine;
             updLine(lineIndex, 'product_id', id);
+            
+            const selectedProduct = p || products.find((x: any) => x.id === id);
+            if (selectedProduct?.type === 'service') {
+              updLine(lineIndex, 'location_id', undefined);
+            }
             
             if (p?.list_price) {
               updLine(lineIndex, 'price_unit', p.list_price);

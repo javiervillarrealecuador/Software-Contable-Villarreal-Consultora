@@ -544,6 +544,18 @@ export default function NewPurchasePage() {
           <div style={{ ...S.panel, flex: 1.5 }}>
             <div style={S.panelTitle}>Datos Documento</div>
             <div style={S.grid('1fr 1.5fr')}>
+              <div style={{ gridColumn: '1 / span 2' }}>
+                <label style={S.label}>Tipo Comprobante [F2]</label>
+                <select style={S.input} value={tipoComprobante} onChange={e => setTipoComprobante(e.target.value)}>
+                  {TIPO_COMPROBANTE.map(t => <option key={t.cod} value={t.cod}>{t.label}</option>)}
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / span 2' }}>
+                <label style={S.label}>Sustento Tributario [F2]</label>
+                <select style={S.input} value={sustento} onChange={e => setSustento(e.target.value)}>
+                  {SUSTENTO.map(s => <option key={s.cod} value={s.cod}>{s.label}</option>)}
+                </select>
+              </div>
               <div>
                 <label style={S.label}>Serie Nº</label>
                 <input style={S.input} value={invoiceSerie} onChange={e => setInvoiceSerie(e.target.value)} placeholder="001-001" />
@@ -585,23 +597,37 @@ export default function NewPurchasePage() {
               </tr>
             </thead>
             <tbody>
-              {lines.map((l, i) => (
-                <tr key={i}>
-                  <td style={S.td}>
-                    <select style={S.input} value={l.location_id || ''} onChange={e => updLine(i, 'location_id', e.target.value ? Number(e.target.value) : null)}>
-                      <option value="">— Defecto —</option>
-                      {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
-                    </select>
-                  </td>
-                  <td style={S.td}>
-                    <button
-                      type="button"
-                      onClick={() => setShowSelectProductModalForLine(i)}
-                      style={{ ...S.input, textAlign: 'left', backgroundColor: '#fff', cursor: 'pointer', display: 'block', width: '100%', height: '100%' }}
-                    >
-                      {l.product_id ? (products.find((p: any) => p.id === l.product_id)?.name || `Producto #${l.product_id}`) : '-- Seleccionar --'}
-                    </button>
-                  </td>
+              {lines.map((l, i) => {
+                const prod = products.find((p: any) => p.id === l.product_id);
+                const isService = prod?.type === 'service';
+                return (
+                  <tr key={i}>
+                    <td style={S.td}>
+                      <select 
+                        disabled={isService} 
+                        style={{ ...S.input, backgroundColor: isService ? '#f1f5f9' : '#fff', color: isService ? '#94a3b8' : '#000' }} 
+                        value={isService ? '' : (l.location_id || '')} 
+                        onChange={e => updLine(i, 'location_id', e.target.value ? Number(e.target.value) : null)}
+                      >
+                        {isService ? (
+                          <option value="">N/A (Servicio)</option>
+                        ) : (
+                          <>
+                            <option value="">— Defecto —</option>
+                            {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                          </>
+                        )}
+                      </select>
+                    </td>
+                    <td style={S.td}>
+                      <button
+                        type="button"
+                        onClick={() => setShowSelectProductModalForLine(i)}
+                        style={{ ...S.input, textAlign: 'left', backgroundColor: '#fff', cursor: 'pointer', display: 'block', width: '100%', height: '100%' }}
+                      >
+                        {l.product_id ? (products.find((p: any) => p.id === l.product_id)?.name || `Producto #${l.product_id}`) : '-- Seleccionar --'}
+                      </button>
+                    </td>
                   <td style={S.td}>
                     <input style={S.input} value={l.description || ''} onChange={e => updLine(i, 'description', e.target.value)} />
                   </td>
@@ -628,7 +654,8 @@ export default function NewPurchasePage() {
                     <button style={S.btnSm} onClick={() => setLines(ls => ls.filter((_, idx) => idx !== i))}>X</button>
                   </td>
                 </tr>
-              ))}
+              );
+            })}
             </tbody>
           </table>
           <div style={{ marginTop: '0.5rem' }}>
@@ -638,29 +665,11 @@ export default function NewPurchasePage() {
           </div>
         </div>
 
-        {/* BLOQUE INFERIOR: TRIBUTACION Y TOTALES */}
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        {/* BLOQUE INFERIOR: TOTALES */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           
-          {/* TRIBUTACION */}
-          <div style={{ ...S.panel, flex: 1.5 }}>
-            <div style={S.grid('1fr')}>
-              <div>
-                <label style={S.label}>Tipo Comprobante [F2]</label>
-                <select style={S.input} value={tipoComprobante} onChange={e => setTipoComprobante(e.target.value)}>
-                  {TIPO_COMPROBANTE.map(t => <option key={t.cod} value={t.cod}>{t.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={S.label}>Sustento Tributario [F2]</label>
-                <select style={S.input} value={sustento} onChange={e => setSustento(e.target.value)}>
-                  {SUSTENTO.map(s => <option key={s.cod} value={s.cod}>{s.label}</option>)}
-                </select>
-              </div>
-            </div>
-          </div>
-
           {/* TOTALES DESGLOSADOS */}
-          <div style={{ ...S.panel, flex: 2 }}>
+          <div style={{ ...S.panel, width: '100%', maxWidth: '600px' }}>
             <div style={{ display: 'flex', gap: '2rem' }}>
               <div style={{ flex: 1 }}>
                 <div style={S.label}>Valores Gravados (15%, 5%)</div>
@@ -762,6 +771,11 @@ export default function NewPurchasePage() {
             }
             const lineIndex = showSelectProductModalForLine;
             updLine(lineIndex, 'product_id', id);
+            
+            const selectedProduct = p || products.find((x: any) => x.id === id);
+            if (selectedProduct?.type === 'service') {
+              updLine(lineIndex, 'location_id', null);
+            }
             
             if (p?.list_price) {
               updLine(lineIndex, 'price_unit', p.list_price);

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateSaleAccountingEntry } from '@/lib/invoice-accounting';
+import { generateSalesBatchAccountingEntry } from '@/lib/invoice-accounting';
 
 function getServerClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       // Obtener facturas de venta no contabilizadas en el rango de fechas
       const { data: orders, error: orderErr } = await supabase
         .from('sale_order')
-        .select('id, name')
+        .select('id, name, company_id')
         .gte('date_order', startDate)
         .lte('date_order', endDate)
         .is('account_move_id', null)
@@ -31,12 +31,14 @@ export async function POST(request: Request) {
 
       if (orderErr) throw new Error(orderErr.message);
 
-      for (const order of orders || []) {
+      if (orders && orders.length > 0) {
+        const orderIds = orders.map(o => o.id);
         try {
-          const moveId = await generateSaleAccountingEntry(order.id);
-          results.push({ id: order.id, name: order.name, moveId });
+          const companyId = orders[0].company_id || 1;
+          const moveId = await generateSalesBatchAccountingEntry(companyId, orderIds, startDate, endDate);
+          results.push({ id: moveId, name: `Lote de Ventas (${orders.length} facturas)`, moveId });
         } catch (err: any) {
-          errors.push({ id: order.id, name: order.name, error: err.message });
+          errors.push({ id: 0, name: 'Lote de Ventas', error: err.message });
         }
       }
     } else if (docType === 'received_withholding') {
@@ -50,8 +52,6 @@ export async function POST(request: Request) {
 
       if (whErr) throw new Error(whErr.message);
       
-      // Necesitamos importar dinámicamente o añadir la importación arriba.
-      // Ya que no lo tenemos arriba, haremos un import dinamico para evitar modificar la parte superior si es posible, o modificar ambas
       const { generateReceivedWithholdingEntry } = require('@/lib/received-withholding-accounting');
 
       for (const wh of withholdings || []) {
@@ -63,9 +63,28 @@ export async function POST(request: Request) {
         }
       }
     } else if (docType === 'purchase') {
-      // Futura implementación para compras
-      // const { data: orders } = await supabase.from('purchase_order')...
-      return NextResponse.json({ error: 'La contabilización de compras por lotes está en construcción.' }, { status: 400 });
+      // Obtener compras confirmadas no contabilizadas en el rango de fechas
+      const { data: orders, error: orderErr } = await supabase
+        .from('purchase_order')
+        .select('id, name, company_id')
+        .gte('date_order', startDate)
+        .lte('date_order', endDate)
+        .is('account_move_id', null)
+        .eq('state', 'confirmed');
+
+      if (orderErr) throw new Error(orderErr.message);
+
+      if (orders && orders.length > 0) {
+        const orderIds = orders.map(o => o.id);
+        try {
+          const { generatePurchasesBatchAccountingEntry } = require('@/lib/erp-accounting');
+          const companyId = orders[0].company_id || 1;
+          const moveId = await generatePurchasesBatchAccountingEntry(companyId, orderIds, startDate, endDate);
+          results.push({ id: moveId, name: `Lote de Compras (${orders.length} facturas)`, moveId });
+        } catch (err: any) {
+          errors.push({ id: 0, name: 'Lote de Compras', error: err.message });
+        }
+      }
     } else {
       return NextResponse.json({ error: 'Tipo de documento no soportado' }, { status: 400 });
     }

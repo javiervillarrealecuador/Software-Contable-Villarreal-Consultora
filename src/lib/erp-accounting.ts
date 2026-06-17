@@ -128,10 +128,11 @@ export interface PurchaseEntryInput {
   amount_total: number;
   ret_renta?: number;      // valor retenido renta (reduce lo que se le paga al proveedor)
   ret_iva?: number;        // valor retenido IVA
+  purchase_id?: number;
 }
 
 // Asiento de COMPRA con retenciones:
-// Debe : Inventario      (subtotal sin IVA)
+// Debe : Inventario o Cuentas de Gasto de Servicios (subtotal sin IVA)
 // Debe : IVA Crédito     (IVA compra)       [si IVA > 0]
 // Haber: Proveedores     (total - ret_renta - ret_iva)
 // Haber: Ret. Renta PP   (ret_renta)        [si > 0]
@@ -160,9 +161,75 @@ export async function createPurchaseEntry(input: PurchaseEntryInput): Promise<nu
     catch { /* cuenta no creada aún */ }
   }
 
-  const lines: any[] = [
-    { account_id: ctaInventario, name: `Ingreso inventario ${input.purchase_name}`, debit: r2(input.amount_untaxed), credit: 0 },
-  ];
+  // Calculate credits first to ensure perfect mathematical balance
+  const totalCreditSum = ctaRetRenta || ctaRetIva ? r2(netoProv + retRenta + (ctaRetIva ? retIva : 0)) : r2(input.amount_total);
+  const totalUntaxedDebit = r2(totalCreditSum - r2(input.amount_tax));
+
+  const debitLines: any[] = [];
+
+  if (input.purchase_id) {
+    const { data: purchaseLines, error: linesErr } = await supabase
+      .from('purchase_order_line')
+      .select('price_subtotal, product:product_product(id, template:product_template(type, expense_account_id))')
+      .eq('order_id', input.purchase_id);
+
+    if (!linesErr && purchaseLines && purchaseLines.length > 0) {
+      const serviceAllocations: Record<number, number> = {};
+      let allocatedTotal = 0;
+
+      for (const line of purchaseLines as any[]) {
+        const isService = line.product?.template?.type === 'service';
+        const expenseAcc = line.product?.template?.expense_account_id;
+        const subtotal = Number(line.price_subtotal || 0);
+
+        if (isService && expenseAcc) {
+          serviceAllocations[expenseAcc] = (serviceAllocations[expenseAcc] || 0) + subtotal;
+          allocatedTotal += subtotal;
+        }
+      }
+
+      const serviceDebitSum = Object.values(serviceAllocations).reduce((a, b) => a + b, 0);
+      const inventoryDebit = r2(totalUntaxedDebit - serviceDebitSum);
+
+      if (inventoryDebit > 0) {
+        debitLines.push({
+          account_id: ctaInventario,
+          name: `Ingreso inventario ${input.purchase_name}`,
+          debit: inventoryDebit,
+          credit: 0,
+        });
+      }
+
+      for (const accIdStr in serviceAllocations) {
+        const accId = parseInt(accIdStr);
+        const amt = r2(serviceAllocations[accId]);
+        if (amt > 0) {
+          debitLines.push({
+            account_id: accId,
+            name: `Gasto servicio ${input.purchase_name}`,
+            debit: amt,
+            credit: 0,
+          });
+        }
+      }
+    } else {
+      debitLines.push({
+        account_id: ctaInventario,
+        name: `Ingreso inventario ${input.purchase_name}`,
+        debit: totalUntaxedDebit,
+        credit: 0,
+      });
+    }
+  } else {
+    debitLines.push({
+      account_id: ctaInventario,
+      name: `Ingreso inventario ${input.purchase_name}`,
+      debit: totalUntaxedDebit,
+      credit: 0,
+    });
+  }
+
+  const lines: any[] = [...debitLines];
   if (input.amount_tax > 0) {
     lines.push({ account_id: ctaIvaCred, name: `IVA compra ${input.purchase_name}`, debit: r2(input.amount_tax), credit: 0 });
   }
@@ -287,5 +354,162 @@ export async function createNotaDebitoEntry(input: NotaDebitoEntryInput): Promis
   });
 
   await postMove(move.id);
+  return move.id;
+}
+
+export async function generatePurchasesBatchAccountingEntry(
+  companyId: number,
+  purchaseOrderIds: number[],
+  startDate: string,
+  endDate: string
+): Promise<number> {
+  const { data: orders, error: orderError } = await supabase
+    .from('purchase_order')
+    .select('*')
+    .in('id', purchaseOrderIds);
+
+  if (orderError || !orders || orders.length === 0) {
+    throw new Error('Error cargando órdenes de compra o lista vacía.');
+  }
+
+  const alreadyPosted = orders.filter(o => o.account_move_id);
+  if (alreadyPosted.length > 0) {
+    throw new Error(`Las siguientes compras ya están contabilizadas: ${alreadyPosted.map(o => o.name).join(', ')}`);
+  }
+
+  // Fetch all lines for the given purchases to resolve service vs physical allocations
+  const { data: allLines, error: linesError } = await supabase
+    .from('purchase_order_line')
+    .select('order_id, price_subtotal, product:product_product(id, template:product_template(type, expense_account_id))')
+    .in('order_id', purchaseOrderIds);
+
+  if (linesError) {
+    throw new Error('Error al cargar las líneas de las compras para prorrateo contable: ' + linesError.message);
+  }
+
+  const orderLinesMap: Record<number, any[]> = {};
+  if (allLines) {
+    for (const line of allLines) {
+      const oid = line.order_id;
+      if (!orderLinesMap[oid]) orderLinesMap[oid] = [];
+      orderLinesMap[oid].push(line);
+    }
+  }
+
+  const [journalId, ctaInventario, ctaIvaCred, ctaProveedores, ctaRetRenta, ctaRetIva] = await Promise.all([
+    getJournalIdByCode(companyId, JOURNAL_CODES.compras),
+    getAccountIdByCode(companyId, ACCOUNT_CODES.inventario),
+    getAccountIdByCode(companyId, ACCOUNT_CODES.ivaCredito),
+    getAccountIdByCode(companyId, ACCOUNT_CODES.proveedores),
+    getAccountIdByCode(companyId, ACCOUNT_CODES.retRentaPagar).catch(() => null),
+    getAccountIdByCode(companyId, ACCOUNT_CODES.retIvaPagar).catch(() => null),
+  ]);
+
+  const debitMap: Record<number, number> = {};
+  const creditMap: Record<number, number> = {};
+
+  for (const order of orders) {
+    const amtTax = Number(order.amount_tax);
+    const amtTotal = Number(order.amount_total);
+    const retRenta = Number(order.ret_valor_renta || 0);
+    const retIva = Number(order.ret_valor_iva || 0);
+
+    const retRentaValue = retRenta > 0 && ctaRetRenta ? retRenta : 0;
+    const retIvaValue = retIva > 0 && ctaRetIva ? retIva : 0;
+    const netoProv = (ctaRetRenta && retRenta > 0) || (ctaRetIva && retIva > 0)
+      ? amtTotal - retRentaValue - retIvaValue
+      : amtTotal;
+
+    const orderCreditSum = netoProv + retRentaValue + retIvaValue;
+    const orderUntaxedDebit = orderCreditSum - amtTax;
+
+    if (amtTax > 0) {
+      debitMap[ctaIvaCred] = (debitMap[ctaIvaCred] || 0) + amtTax;
+    }
+
+    if (retRenta > 0 && ctaRetRenta) {
+      creditMap[ctaRetRenta] = (creditMap[ctaRetRenta] || 0) + retRenta;
+    }
+    if (retIva > 0 && ctaRetIva) {
+      creditMap[ctaRetIva] = (creditMap[ctaRetIva] || 0) + retIva;
+    }
+    creditMap[ctaProveedores] = (creditMap[ctaProveedores] || 0) + netoProv;
+
+    // Prorrateo de líneas
+    const oLines = orderLinesMap[order.id] || [];
+    const serviceAllocations: Record<number, number> = {};
+
+    for (const line of oLines) {
+      const isService = line.product?.template?.type === 'service';
+      const expenseAcc = line.product?.template?.expense_account_id;
+      const subtotal = Number(line.price_subtotal || 0);
+
+      if (isService && expenseAcc) {
+        serviceAllocations[expenseAcc] = (serviceAllocations[expenseAcc] || 0) + subtotal;
+      }
+    }
+
+    const serviceDebitSum = Object.values(serviceAllocations).reduce((a, b) => a + b, 0);
+    const inventoryDebit = orderUntaxedDebit - serviceDebitSum;
+
+    if (inventoryDebit > 0) {
+      debitMap[ctaInventario] = (debitMap[ctaInventario] || 0) + inventoryDebit;
+    }
+    for (const accIdStr in serviceAllocations) {
+      const accId = parseInt(accIdStr);
+      debitMap[accId] = (debitMap[accId] || 0) + serviceAllocations[accId];
+    }
+  }
+
+  const lines: any[] = [];
+  
+  for (const accId in debitMap) {
+    const accountId = parseInt(accId);
+    let lineName = 'Ingreso inventario masivo compras';
+    if (accountId !== ctaInventario && accountId !== ctaIvaCred) {
+      lineName = 'Gasto servicio masivo compras';
+    } else if (accountId === ctaIvaCred) {
+      lineName = 'IVA compra masivo compras';
+    }
+    lines.push({
+      account_id: accountId,
+      name: lineName,
+      debit: r2(debitMap[accId]),
+      credit: 0,
+    });
+  }
+
+  for (const accId in creditMap) {
+    let lineName = 'Proveedores (Lote)';
+    if (ctaRetRenta && parseInt(accId) === ctaRetRenta) lineName = 'Retención Renta (Lote)';
+    else if (ctaRetIva && parseInt(accId) === ctaRetIva) lineName = 'Retención IVA (Lote)';
+
+    lines.push({
+      account_id: parseInt(accId),
+      name: lineName,
+      debit: 0,
+      credit: r2(creditMap[accId]),
+    });
+  }
+
+  const move = await createMove(companyId, {
+    journal_id: journalId,
+    date: endDate,
+    ref: `LOTE COMPRAS ${startDate} a ${endDate}`,
+    narration: `Asiento automático por contabilización masiva de compras del ${startDate} al ${endDate} (${orders.length} documentos)`,
+    lines,
+  });
+
+  await postMove(move.id);
+
+  const { error: updateError } = await supabase
+    .from('purchase_order')
+    .update({ account_move_id: move.id })
+    .in('id', purchaseOrderIds);
+
+  if (updateError) {
+    throw new Error('Error asociando asiento contable a las compras: ' + updateError.message);
+  }
+
   return move.id;
 }

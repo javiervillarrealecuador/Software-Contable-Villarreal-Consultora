@@ -100,11 +100,15 @@ export async function createPurchase(input: CreatePurchaseInput) {
 export async function confirmPurchase(orderId: number) {
   const { data: order, error: orderErr } = await supabase.from('purchase_order').select(`
     id, company_id, state, date_order, name, partner_id,
-    invoice_ref, amount_untaxed, amount_tax, amount_total, ret_valor_renta, ret_valor_iva,
-    lines:purchase_order_line(id, product_id, quantity, price_unit, location_id)
+    invoice_ref, amount_untaxed, amount_tax, amount_total, ret_valor_renta, ret_valor_iva, account_move_id,
+    lines:purchase_order_line(
+      id, product_id, quantity, price_unit, location_id,
+      product:product_product(id, template:product_template(type))
+    )
   `).eq('id', orderId).single();
   if (orderErr) throw orderErr;
   if (!order || order.state !== 'draft') throw new Error('La compra debe estar en borrador para confirmar');
+  if (order.account_move_id) throw new Error('Esta compra ya tiene un asiento contable asociado.');
 
   const locs = await getLocations();
   const internal = locs.find((l: any) => l.usage === 'internal');
@@ -113,6 +117,10 @@ export async function confirmPurchase(orderId: number) {
 
   for (const line of (order.lines || []) as any[]) {
     if (!line.product_id || !supplier) continue;
+    
+    const isService = (line.product as any)?.template?.type === 'service';
+    if (isService) continue;
+
     const destLocId = line.location_id || internal?.id;
     if (!destLocId) continue;
     
@@ -133,6 +141,7 @@ export async function confirmPurchase(orderId: number) {
       amount_untaxed: Number(order.amount_untaxed), amount_tax: Number(order.amount_tax),
       amount_total: Number(order.amount_total),
       ret_renta: Number(order.ret_valor_renta || 0), ret_iva: Number(order.ret_valor_iva || 0),
+      purchase_id: order.id
     });
     await supabase.from('purchase_order').update({ account_move_id: moveId }).eq('id', orderId);
   } catch (e: any) { console.error('Asiento compra falló:', e.message); }
