@@ -157,50 +157,209 @@ export default function NewPurchasePage() {
     }
   }
 
-  const handleUploadXML = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
+  async function parseAndLoadSingleXML(text: string) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/xml');
+    
+    // 1. Validar que tenga estructura tributaria
+    const info = doc.querySelector('infoTributaria');
+    if (!info) throw new Error('No se encontró infoTributaria en el XML.');
+
+    // 2. Validar que sea un comprobante de tipo Factura (codDoc = '01')
+    const codDoc = info.querySelector('codDoc')?.textContent?.trim();
+    if (codDoc !== '01') {
+      throw new Error('El comprobante cargado no es una Factura Electrónica (codDoc debe ser 01).');
+    }
+
+    // 3. Validar que esté dirigida a la empresa activa (RUC del comprador)
+    const buyerVat = doc.querySelector('infoFactura > identificacionComprador')?.textContent?.trim();
+    const companyVat = activeCompany?.vat?.trim();
+    if (!buyerVat) {
+      throw new Error('No se encontró la identificación del comprador en el XML.');
+    }
+    if (buyerVat !== companyVat) {
+      throw new Error(`Esta factura está emitida al RUC de comprador ${buyerVat}, el cual no coincide con el RUC de la empresa activa (${companyVat || 'sin configurar'}).`);
+    }
+
+    // 4. Obtener datos del Proveedor y crearlo si no existe
+    const supplierName = info.querySelector('razonSocial')?.textContent?.trim() || doc.querySelector('infoFactura > razonSocialProveedor')?.textContent?.trim() || 'Proveedor Importado';
+    const supplierVat = info.querySelector('ruc')?.textContent?.trim();
+    if (!supplierVat) {
+      throw new Error('No se encontró el RUC del proveedor en el XML.');
+    }
+
+    const foundPartner = partners.find(x => x.vat?.trim() === supplierVat);
+    if (foundPartner) {
+      setPartnerId(foundPartner.id);
+    } else {
+      const confirmCreate = window.confirm(`El proveedor "${supplierName}" con RUC ${supplierVat} no está registrado. ¿Deseas crearlo automáticamente?`);
+      if (!confirmCreate) return;
+
       try {
-        const text = evt.target?.result as string;
+        const newP = await createPartner({
+          company_id: activeCompanyId,
+          name: supplierName,
+          vat: supplierVat,
+          is_supplier: true,
+          is_customer: false,
+          active: true
+        });
+        if (newP) {
+          setPartners(prev => [...prev, newP]);
+          setPartnerId(newP.id);
+        }
+      } catch (err: any) {
+        throw new Error('Error al registrar proveedor: ' + err.message);
+      }
+    }
+
+    // 5. Cargar datos del documento
+    const estab = info.querySelector('estab')?.textContent?.trim() || '001';
+    const ptoEmi = info.querySelector('ptoEmi')?.textContent?.trim() || '001';
+    const sec = info.querySelector('secuencial')?.textContent?.trim() || '';
+    const accessKey = info.querySelector('claveAcceso')?.textContent?.trim() || '';
+    setInvoiceSerie(`${estab}-${ptoEmi}`);
+    setInvoiceNum(sec);
+    setInvoiceAuth(accessKey);
+
+    const dateStr = doc.querySelector('infoFactura > fechaEmision')?.textContent?.trim();
+    if (dateStr) {
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        const formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        setInvoiceDate(formattedDate);
+        setDateOrder(formattedDate);
+        setDueDate(formattedDate);
+      }
+    }
+
+    // 6. Cargar subtotales adicionales (no objeto, exento)
+    let noIva = 0;
+    let exento = 0;
+    const totalsList = doc.querySelectorAll('infoFactura > totalConImpuestos > totalImpuesto');
+    totalsList.forEach(tot => {
+      const cod = tot.querySelector('codigo')?.textContent;
+      const pctCod = tot.querySelector('codigoPorcentaje')?.textContent;
+      const base = parseFloat(tot.querySelector('baseImponible')?.textContent || '0');
+      if (cod === '2') {
+        // IVA - cubierto por líneas
+      } else {
+        if (pctCod === '6') noIva += base;
+        if (pctCod === '7') exento += base;
+      }
+    });
+    setAmountNoIva(noIva);
+    setAmountExentoIva(exento);
+
+    // 7. Cargar líneas de detalles
+    const extractedLines: PurchaseLine[] = [];
+    const details = doc.querySelectorAll('detalles > detalle');
+    details.forEach(det => {
+      const desc = det.querySelector('descripcion')?.textContent?.trim() || 'Detalle Factura';
+      const qty = parseFloat(det.querySelector('cantidad')?.textContent || '1');
+      const price = parseFloat(det.querySelector('precioUnitario')?.textContent || '0');
+      const descAmt = parseFloat(det.querySelector('descuento')?.textContent || '0');
+      
+      const subtotal = qty * price;
+      const discPct = subtotal > 0 ? (descAmt / subtotal) * 100 : 0;
+      
+      let iva_rate = 15;
+      const imp = det.querySelector('impuestos > impuesto');
+      if (imp) {
+        const cod = imp.querySelector('codigo')?.textContent;
+        const pctCod = imp.querySelector('codigoPorcentaje')?.textContent;
+        if (cod === '2') {
+          if (pctCod === '0') iva_rate = 0;
+          else if (pctCod === '5') iva_rate = 5;
+          else if (pctCod === '2') iva_rate = 12;
+          else if (pctCod === '4') iva_rate = 15;
+        }
+      }
+      
+      extractedLines.push({
+        product_id: null,
+        description: desc,
+        quantity: qty,
+        price_unit: price,
+        discount: Math.round(discPct * 100) / 100,
+        iva_rate,
+        location_id: null
+      });
+    });
+
+    if (extractedLines.length > 0) {
+      setLines(extractedLines);
+    }
+  }
+
+  const handleUploadXML = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Si es un solo archivo, lo cargamos en el formulario para edición
+    if (files.length === 1) {
+      const file = files[0];
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const text = evt.target?.result as string;
+          await parseAndLoadSingleXML(text);
+          alert('Factura cargada correctamente en el formulario.');
+        } catch (err: any) {
+          alert('Error leyendo XML: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+      return;
+    }
+
+    // Si son múltiples archivos, procesamos en lote directamente a la base de datos
+    setSaving(true);
+    let successCount = 0;
+    let errorCount = 0;
+    let newPartnersCount = 0;
+    const errors: string[] = [];
+
+    // Copia local de partners para buscar y registrar en lote
+    let localPartners = [...partners];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const text = await file.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(text, 'text/xml');
-        
-        // 1. Validar que tenga estructura tributaria
-        const info = doc.querySelector('infoTributaria');
-        if (!info) throw new Error('No se encontró infoTributaria en el XML.');
 
-        // 2. Validar que sea un comprobante de tipo Factura (codDoc = '01')
+        // 1. Validar estructura
+        const info = doc.querySelector('infoTributaria');
+        if (!info) throw new Error('No se encontró infoTributaria.');
+
+        // 2. Validar que sea Factura
         const codDoc = info.querySelector('codDoc')?.textContent?.trim();
         if (codDoc !== '01') {
-          throw new Error('El comprobante cargado no es una Factura Electrónica (codDoc debe ser 01).');
+          throw new Error('No es una Factura Electrónica (codDoc debe ser 01).');
         }
 
-        // 3. Validar que esté dirigida a la empresa activa (RUC del comprador)
+        // 3. Validar RUC del comprador
         const buyerVat = doc.querySelector('infoFactura > identificacionComprador')?.textContent?.trim();
         const companyVat = activeCompany?.vat?.trim();
-        if (!buyerVat) {
-          throw new Error('No se encontró la identificación del comprador en el XML.');
-        }
+        if (!buyerVat) throw new Error('No se encontró la identificación del comprador.');
         if (buyerVat !== companyVat) {
-          throw new Error(`Esta factura está emitida al RUC de comprador ${buyerVat}, el cual no coincide con el RUC de la empresa activa (${companyVat || 'sin configurar'}).`);
+          throw new Error(`El RUC del comprador (${buyerVat}) no coincide con la empresa activa (${companyVat || 'sin configurar'}).`);
         }
 
-        // 4. Obtener datos del Proveedor y crearlo si no existe
+        // 4. Proveedor
         const supplierName = info.querySelector('razonSocial')?.textContent?.trim() || doc.querySelector('infoFactura > razonSocialProveedor')?.textContent?.trim() || 'Proveedor Importado';
         const supplierVat = info.querySelector('ruc')?.textContent?.trim();
-        if (!supplierVat) {
-          throw new Error('No se encontró el RUC del proveedor en el XML.');
-        }
+        if (!supplierVat) throw new Error('No se encontró el RUC del proveedor.');
 
-        const foundPartner = partners.find(x => x.vat?.trim() === supplierVat);
+        let targetPartnerId = 0;
+        const foundPartner = localPartners.find(x => x.vat?.trim() === supplierVat);
         if (foundPartner) {
-          setPartnerId(foundPartner.id);
+          targetPartnerId = foundPartner.id;
         } else {
-          const confirmCreate = window.confirm(`El proveedor "${supplierName}" con RUC ${supplierVat} no está registrado. ¿Deseas crearlo automáticamente?`);
-          if (!confirmCreate) return;
-
+          // Crear proveedor automáticamente en lote sin confirmación individual para agilizar
           try {
             const newP = await createPartner({
               company_id: activeCompanyId,
@@ -211,8 +370,9 @@ export default function NewPurchasePage() {
               active: true
             });
             if (newP) {
-              setPartners(prev => [...prev, newP]);
-              setPartnerId(newP.id);
+              localPartners.push(newP);
+              targetPartnerId = newP.id;
+              newPartnersCount++;
             }
           } catch (err: any) {
             throw new Error('Error al registrar proveedor: ' + err.message);
@@ -224,22 +384,18 @@ export default function NewPurchasePage() {
         const ptoEmi = info.querySelector('ptoEmi')?.textContent?.trim() || '001';
         const sec = info.querySelector('secuencial')?.textContent?.trim() || '';
         const accessKey = info.querySelector('claveAcceso')?.textContent?.trim() || '';
-        setInvoiceSerie(`${estab}-${ptoEmi}`);
-        setInvoiceNum(sec);
-        setInvoiceAuth(accessKey);
+        const fullInvoiceRef = `${estab}-${ptoEmi}-${sec.padStart(9, '0')}`;
 
+        let docDate = new Date().toISOString().slice(0, 10);
         const dateStr = doc.querySelector('infoFactura > fechaEmision')?.textContent?.trim();
         if (dateStr) {
           const parts = dateStr.split('/');
           if (parts.length === 3) {
-            const formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            setInvoiceDate(formattedDate);
-            setDateOrder(formattedDate);
-            setDueDate(formattedDate);
+            docDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
           }
         }
 
-        // 6. Cargar subtotales adicionales (no objeto, exento)
+        // 6. Subtotales
         let noIva = 0;
         let exento = 0;
         const totalsList = doc.querySelectorAll('infoFactura > totalConImpuestos > totalImpuesto');
@@ -248,16 +404,14 @@ export default function NewPurchasePage() {
           const pctCod = tot.querySelector('codigoPorcentaje')?.textContent;
           const base = parseFloat(tot.querySelector('baseImponible')?.textContent || '0');
           if (cod === '2') {
-            // IVA - cubierto por líneas
+            // IVA
           } else {
             if (pctCod === '6') noIva += base;
             if (pctCod === '7') exento += base;
           }
         });
-        setAmountNoIva(noIva);
-        setAmountExentoIva(exento);
 
-        // 7. Cargar líneas de detalles
+        // 7. Detalles
         const extractedLines: PurchaseLine[] = [];
         const details = doc.querySelectorAll('detalles > detalle');
         details.forEach(det => {
@@ -293,15 +447,50 @@ export default function NewPurchasePage() {
           });
         });
 
-        if (extractedLines.length > 0) {
-          setLines(extractedLines);
-        }
-        alert('Factura cargada correctamente desde el XML.');
+        const validLines = extractedLines.filter(l => l.quantity > 0 && l.price_unit > 0);
+        if (validLines.length === 0) throw new Error('No contiene líneas de detalle válidas.');
+
+        // Guardar la compra
+        await createPurchase({
+          company_id: activeCompanyId,
+          partner_id: targetPartnerId,
+          date_order: docDate,
+          due_date: docDate,
+          invoice_ref: fullInvoiceRef,
+          invoice_auth: accessKey,
+          invoice_date: docDate,
+          tipo_comprobante: '01',
+          sustento_tributario: '01',
+          amount_no_iva: noIva,
+          amount_exento_iva: exento,
+          lines: validLines,
+        });
+
+        successCount++;
       } catch (err: any) {
-        alert('Error leyendo XML: ' + err.message);
+        errorCount++;
+        errors.push(`"${file.name}": ${err.message}`);
       }
-    };
-    reader.readAsText(file);
+    }
+
+    setSaving(false);
+    setPartners(localPartners); // Actualizar listado local de proveedores
+
+    let summary = `Importación en lote finalizada:\n`;
+    summary += `- Facturas cargadas exitosamente: ${successCount}\n`;
+    summary += `- Proveedores creados: ${newPartnersCount}\n`;
+    summary += `- Facturas con error: ${errorCount}\n`;
+
+    if (errors.length > 0) {
+      summary += `\nDetalle de errores:\n` + errors.slice(0, 10).join('\n');
+      if (errors.length > 10) summary += `\n... y ${errors.length - 10} errores más.`;
+    }
+
+    alert(summary);
+
+    if (successCount > 0) {
+      router.push('/purchases');
+    }
     e.target.value = '';
   };
 
@@ -313,8 +502,8 @@ export default function NewPurchasePage() {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <label style={{ ...S.btnOutline, display: 'inline-flex', alignItems: 'center', gap: '0.4rem', margin: 0, cursor: 'pointer', backgroundColor: '#eff6ff', borderColor: '#bfdbfe', color: '#1d4ed8' }}>
-            📄 Cargar XML
-            <input type="file" accept=".xml" style={{ display: 'none' }} onChange={handleUploadXML} />
+            📄 Cargar XML(s)
+            <input type="file" accept=".xml" multiple style={{ display: 'none' }} onChange={handleUploadXML} />
           </label>
           <button style={S.btnOutline} onClick={() => router.push('/purchases')}>Cerrar</button>
           <button style={S.btn} onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>

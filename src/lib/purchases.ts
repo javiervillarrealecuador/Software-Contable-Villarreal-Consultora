@@ -38,7 +38,7 @@ export async function getPurchaseOrders(companyId: number) {
       id, name, date_order, invoice_ref, invoice_auth, invoice_date,
       state, amount_untaxed, amount_tax, amount_total,
       ret_numero, ret_estado, ret_autorizacion, ret_ambiente,
-      ret_valor_renta, ret_valor_iva,
+      ret_valor_renta, ret_valor_iva, account_move_id,
       partner:res_partner(id, name, vat)
     `)
     .eq('company_id', companyId)

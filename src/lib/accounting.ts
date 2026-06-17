@@ -126,7 +126,11 @@ export async function getMoves(companyId: number, limit = 50) {
     .from('account_move')
     .select(`
       *,
-      journal:account_journal(id, name, code, type)
+      journal:account_journal(id, name, code, type),
+      lines:account_move_line(
+        *,
+        account:account_account(id, code, name)
+      )
     `)
     .eq('company_id', companyId)
     .order('date', { ascending: false })

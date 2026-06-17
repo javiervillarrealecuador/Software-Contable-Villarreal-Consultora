@@ -193,7 +193,7 @@ export async function getSaleOrders(companyId: number): Promise<any[]> {
       + 'state, amount_untaxed, amount_tax, amount_total, cost_total,'
       + 'amount_taxed, amount_zero, amount_no_objeto, amount_exento, amount_ice, amount_discount,'
       + 'payment_term, payment_days, due_date, observation, reference, warehouse_id, forma_pago,'
-      + 'sri_estado, sri_autorizacion, sri_ambiente,'
+      + 'sri_estado, sri_autorizacion, sri_ambiente, account_move_id,'
       + 'partner:res_partner!sale_order_partner_id_fkey(id, name, vat, phone, street, city),'
       + 'seller:res_partner!sale_order_seller_id_fkey(id, name)'
     )

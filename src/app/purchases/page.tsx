@@ -161,7 +161,10 @@ export default function PurchasesPage() {
                 <tbody>
                   {orders.map(o => (
                     <tr key={o.id}>
-                      <td style={{ ...S.td, fontFamily: 'monospace', fontWeight: 600 }}>{o.name}</td>
+                      <td style={{ ...S.td, fontFamily: 'monospace', fontWeight: 600 }}>
+                        {o.account_move_id && <span title={`Contabilizado (Asiento: MOVE-${o.account_move_id})`} style={{ marginRight: '4px', cursor: 'help' }}>🔒</span>}
+                        {o.name}
+                      </td>
                       <td style={S.td}>{o.date_order}</td>
                       <td style={S.td}>{o.partner?.name || '-'}</td>
                       <td style={{ ...S.td, fontFamily: 'monospace', fontSize: '0.8rem' }}>{o.invoice_ref || '-'}</td>
@@ -190,16 +193,24 @@ export default function PurchasesPage() {
                         )}
                       </td>
                       <td style={{ ...S.td, whiteSpace: 'nowrap' as const }}>
-                        {o.state === 'draft' && (
+                        {o.account_move_id ? (
+                          <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontWeight: 600 }}>
+                            🔒 Contabilizado
+                          </span>
+                        ) : (
                           <>
-                            <button style={S.btnSm} onClick={() => handleConfirm(o.id)}>Confirmar</button>{' '}
-                            <button style={{ ...S.btnSm, background: '#dc2626' }} onClick={() => handleCancel(o.id)}>Anular</button>{' '}
+                            {o.state === 'draft' && (
+                              <>
+                                <button style={S.btnSm} onClick={() => handleConfirm(o.id)}>Confirmar</button>{' '}
+                                <button style={{ ...S.btnSm, background: '#dc2626' }} onClick={() => handleCancel(o.id)}>Anular</button>{' '}
+                              </>
+                            )}
+                            {o.state !== 'cancel' && (
+                              <button style={{ ...S.btnSm, background: '#7c3aed' }} onClick={() => openRetModal(o)}>
+                                Retención SRI
+                              </button>
+                            )}
                           </>
-                        )}
-                        {o.state !== 'cancel' && (
-                          <button style={{ ...S.btnSm, background: '#7c3aed' }} onClick={() => openRetModal(o)}>
-                            Retención SRI
-                          </button>
                         )}
                       </td>
                     </tr>

@@ -104,7 +104,7 @@ export default function SalesPage() {
   const [withholding, setWithholding] = useState<ReceivedWithholding | null>(null);
   const [whForm, setWhForm] = useState({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0, lines: [] as any[] });
 
-  const isEditable = docState === 'draft' || !currentId;
+  const isEditable = (docState === 'draft' || !currentId) && !currentOrder?.account_move_id;
 
   useEffect(() => { loadAll(); }, []);
 
@@ -535,11 +535,16 @@ export default function SalesPage() {
                 <tbody>
                   {orders.map(o => (
                     <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => handleOpen(o.id)} onMouseEnter={e => (e.currentTarget.style.background = '#f0f9ff')} onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                      <td style={{ ...C.td, fontFamily: 'monospace', fontWeight: 700 }}>{o.name}</td>
+                      <td style={{ ...C.td, fontFamily: 'monospace', fontWeight: 700 }}>
+                        {o.account_move_id && <span title={`Contabilizado (Asiento: MOVE-${o.account_move_id})`} style={{ marginRight: '4px', cursor: 'help' }}>🔒</span>}
+                        {o.name}
+                      </td>
                       <td style={C.td}>{o.date_order}</td>
                       <td style={C.td}>{o.partner?.name || '-'}</td>
                       <td style={{ ...C.td, fontFamily: 'monospace', fontSize: '11px' }}>{o.invoice_ref || '-'}</td>
-                      <td style={{ ...C.td, fontFamily: 'monospace', fontSize: '11px', color: '#16a34a' }}>{o.account_move_id ? `MOVE-${o.account_move_id}` : '-'}</td>
+                      <td style={{ ...C.td, fontFamily: 'monospace', fontSize: '11px', color: o.account_move_id ? '#047857' : '#64748b', fontWeight: o.account_move_id ? '600' : 'normal' }}>
+                        {o.account_move_id ? `🔒 MOVE-${o.account_move_id}` : '-'}
+                      </td>
 
                       <td style={C.td}>{PAYMENT_TERMS.find(t => t.value === o.payment_term)?.label || o.payment_term || 'Contado'}</td>
                       <td style={{ ...C.td, fontSize: '11px' }}>{FORMAS_PAGO_SRI.find(f => f.value === o.forma_pago)?.label || o.forma_pago || '-'}</td>
@@ -939,7 +944,7 @@ export default function SalesPage() {
             </button>
           )}
 
-          {currentId && docState === 'draft' && (
+          {currentId && docState === 'draft' && !currentOrder?.account_move_id && (
             <>
               <button style={{ ...C.btnSide, color: '#16a34a', borderColor: '#16a34a' }} onClick={handleDeliver}>Entregar</button>
               <button style={{ ...C.btnSide, color: '#dc2626', borderColor: '#dc2626' }} onClick={handleCancel}>Anular</button>

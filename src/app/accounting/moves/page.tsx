@@ -1,7 +1,7 @@
 // src/app/accounting/moves/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 
 import { getCompanies } from '@/lib/supabase';
 import { getAccounts, getJournals, getMoves, getMove, createMove, postMove, deleteMove, draftMove } from '@/lib/accounting';
@@ -40,6 +40,21 @@ export default function MovesPage() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [ref, setRef] = useState('');
   const [lines, setLines] = useState<MoveLineInput[]>([emptyLine(), emptyLine()]);
+  const [expandedMoves, setExpandedMoves] = useState<Record<number, boolean>>({});
+
+  const toggleMoveExpand = (moveId: number) => {
+    setExpandedMoves(prev => ({ ...prev, [moveId]: !prev[moveId] }));
+  };
+
+  const expandAll = () => {
+    const next: Record<number, boolean> = {};
+    moves.forEach(m => { next[m.id] = true; });
+    setExpandedMoves(next);
+  };
+
+  const collapseAll = () => {
+    setExpandedMoves({});
+  };
 
   useEffect(() => { init(); }, []);
   useEffect(() => { if (companyId) loadAll(); }, [companyId]);
@@ -197,11 +212,33 @@ export default function MovesPage() {
         </div>
 
         <div style={S.card}>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-slate-700">Listado de Asientos</h3>
+            <div className="flex gap-2">
+              <button 
+                type="button" 
+                style={{ ...S.btnSm, background: '#64748b' }} 
+                onClick={expandAll}
+                disabled={moves.length === 0}
+              >
+                Expandir Todos
+              </button>
+              <button 
+                type="button" 
+                style={{ ...S.btnSm, background: '#64748b' }} 
+                onClick={collapseAll}
+                disabled={moves.length === 0}
+              >
+                Colapsar Todos
+              </button>
+            </div>
+          </div>
           {loading ? <p style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>Cargando...</p> :
            moves.length === 0 ? <p style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>No hay asientos registrados. Crea el primero.</p> : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
+                  <th style={{ ...S.th, width: '40px' }}></th>
                   <th style={S.th}>Número</th>
                   <th style={S.th}>Fecha</th>
                   <th style={S.th}>Diario</th>
@@ -213,26 +250,136 @@ export default function MovesPage() {
               </thead>
               <tbody>
                 {moves.map(m => (
-                  <tr key={m.id}>
-                    <td style={{ ...S.td, fontFamily: 'monospace', fontWeight: 600 }}>{m.name}</td>
-                    <td style={S.td}>{m.date}</td>
-                    <td style={S.td}>{(m as any).journal?.name || '-'}</td>
-                    <td style={S.td}>{m.ref || '-'}</td>
-                    <td style={{ ...S.td, textAlign: 'right', fontFamily: 'monospace' }}>${Number(m.amount_total).toFixed(2)}</td>
-                    <td style={S.td}>{stateBadge(m.state)}</td>
-                    <td style={S.td}>
-                      <div className="flex gap-2 items-center">
-                        {m.state === 'draft' && (
-                          <button style={S.btnSm} onClick={() => handlePost(m.id)}>Publicar</button>
-                        )}
-                        {m.state === 'posted' && (
-                          <button style={{ ...S.btnSm, background: '#eab308' }} onClick={() => handleDraft(m.id)}>Revertir a Borrador</button>
-                        )}
-                        <button style={{ ...S.btnSm, background: '#3b82f6' }} onClick={() => handleEdit(m.id)}>Editar</button>
-                        <button style={{ ...S.btnSm, background: '#ef4444' }} onClick={() => handleDelete(m.id)}>Eliminar</button>
-                      </div>
-                    </td>
-                  </tr>
+                  <Fragment key={m.id}>
+                    <tr 
+                      style={{ cursor: 'pointer', transition: 'background-color 0.2s' }} 
+                      onClick={() => toggleMoveExpand(m.id)}
+                      className="hover:bg-slate-50"
+                    >
+                      <td style={S.td} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            color: '#64748b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '24px',
+                            height: '24px',
+                          }}
+                          onClick={() => toggleMoveExpand(m.id)}
+                          title={expandedMoves[m.id] ? "Contraer" : "Expandir"}
+                        >
+                          {expandedMoves[m.id] ? '▼' : '▶'}
+                        </button>
+                      </td>
+                      <td style={{ ...S.td, fontFamily: 'monospace', fontWeight: 600 }}>{m.name}</td>
+                      <td style={S.td}>{m.date}</td>
+                      <td style={S.td}>{(m as any).journal?.name || '-'}</td>
+                      <td style={S.td}>{m.ref || '-'}</td>
+                      <td style={{ ...S.td, textAlign: 'right', fontFamily: 'monospace' }}>${Number(m.amount_total).toFixed(2)}</td>
+                      <td style={S.td}>{stateBadge(m.state)}</td>
+                      <td style={S.td} onClick={(e) => e.stopPropagation()}>
+                        <div className="flex gap-2 items-center">
+                          {m.state === 'draft' && (
+                            <button style={S.btnSm} onClick={() => handlePost(m.id)}>Publicar</button>
+                          )}
+                          {m.state === 'posted' && (
+                            <button style={{ ...S.btnSm, background: '#eab308' }} onClick={() => handleDraft(m.id)}>Revertir a Borrador</button>
+                          )}
+                          <button style={{ ...S.btnSm, background: '#3b82f6' }} onClick={() => handleEdit(m.id)}>Editar</button>
+                          <button style={{ ...S.btnSm, background: '#ef4444' }} onClick={() => handleDelete(m.id)}>Eliminar</button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedMoves[m.id] && (
+                      <tr style={{ background: '#f8fafc' }}>
+                        <td colSpan={8} style={{ padding: '0.75rem 1.5rem 1.5rem 1.5rem', borderBottom: '1px solid #e2e8f0' }}>
+                          <div style={{
+                            borderLeft: '4px solid #3b82f6',
+                            background: 'white',
+                            borderRadius: '0.5rem',
+                            padding: '1.25rem',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                            border: '1px solid #e2e8f0',
+                            borderLeftWidth: '4px'
+                          }}>
+                            <div className="flex justify-between items-center mb-3">
+                              <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Asiento Contable Completo
+                              </h4>
+                              {m.ref && (
+                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                  <strong>Referencia:</strong> {m.ref}
+                                </span>
+                              )}
+                            </div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                              <thead>
+                                <tr style={{ borderBottom: '2px solid #e2e8f0', background: '#f8fafc' }}>
+                                  <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Cuenta</th>
+                                  <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Glosa / Detalle</th>
+                                  <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right', color: '#475569', fontWeight: 600, width: '130px' }}>Débito</th>
+                                  <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right', color: '#475569', fontWeight: 600, width: '130px' }}>Crédito</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {m.lines && m.lines.length > 0 ? (
+                                  [...m.lines]
+                                    .sort((a, b) => (b.debit || 0) - (a.debit || 0) || (a.credit || 0) - (b.credit || 0))
+                                    .map((line, lIdx) => {
+                                      const isCredit = (line.credit || 0) > 0;
+                                      return (
+                                        <tr key={line.id || lIdx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                          <td style={{
+                                            padding: '0.5rem 0.75rem',
+                                            color: '#1e293b',
+                                            paddingLeft: isCredit ? '2.5rem' : '0.75rem',
+                                            fontWeight: isCredit ? 400 : 600
+                                          }}>
+                                            {isCredit ? '└ ' : ''}{line.account?.code} · {line.account?.name}
+                                          </td>
+                                          <td style={{ padding: '0.5rem 0.75rem', color: '#64748b' }}>
+                                            {line.name || m.ref || 'Asiento contable'}
+                                          </td>
+                                          <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a', fontWeight: isCredit ? 400 : 600 }}>
+                                            {line.debit > 0 ? `$${Number(line.debit).toFixed(2)}` : '—'}
+                                          </td>
+                                          <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a', fontWeight: isCredit ? 600 : 400 }}>
+                                            {line.credit > 0 ? `$${Number(line.credit).toFixed(2)}` : '—'}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })
+                                ) : (
+                                  <tr>
+                                    <td colSpan={4} style={{ padding: '1rem', textAlign: 'center', color: '#94a3b8' }}>
+                                      No hay líneas registradas para este asiento.
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                              <tfoot>
+                                <tr style={{ fontWeight: 700, borderTop: '2px solid #cbd5e1', background: '#f8fafc' }}>
+                                  <td colSpan={2} style={{ padding: '0.6rem 0.75rem', textAlign: 'right', color: '#334155' }}>Total General:</td>
+                                  <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
+                                    ${Number(m.amount_total).toFixed(2)}
+                                  </td>
+                                  <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
+                                    ${Number(m.amount_total).toFixed(2)}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
