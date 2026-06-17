@@ -15,6 +15,15 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
   const [, setCompanies] = useState<Company[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [accounts, setAccounts] = useState<any[]>([]);
+
+  useEffect(() => {
+    import('@/lib/supabase').then(({ supabase }) => {
+      supabase.from('account_account').select('id, code, name').then(({ data }) => {
+        if (data) setAccounts(data);
+      });
+    });
+  }, []);
 
   const [formData, setFormData] = useState<PartnerFormData>({
     name: '',
@@ -137,6 +146,9 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
         bank_account_type: initialData.bank_account_type || 'Ahorros',
         bank_account_number: initialData.bank_account_number || '',
         bank_account_id_number: initialData.bank_account_id_number || '',
+        
+        property_account_receivable_id: (initialData as any).property_account_receivable_id || undefined,
+        property_account_payable_id: (initialData as any).property_account_payable_id || undefined,
       });
     }
   }, [initialData]);
@@ -469,6 +481,28 @@ export default function PartnerForm({ initialData, onSaved }: PartnerFormProps) 
               <div>
                 <label className="block text-sm font-semibold mb-1">Identificación N° (Cta)</label>
                 <input type="text" name="bank_account_id_number" value={formData.bank_account_id_number} onChange={handleChange} className="w-full" />
+              </div>
+            </div>
+          </div>
+
+          <div className="card shadow-sm border border-indigo-50 md:col-span-1 bg-indigo-50/20">
+            <h3 className="text-lg font-bold border-b pb-3 mb-5 text-indigo-800 flex items-center gap-2">
+              <span className="text-xl">🧾</span> Contabilidad
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1">Cuenta por Cobrar (Clientes)</label>
+                <select name="property_account_receivable_id" value={formData.property_account_receivable_id || ''} onChange={handleChange} className="w-full">
+                  <option value="">-- Seleccionar Cuenta --</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Cuenta por Pagar (Proveedores)</label>
+                <select name="property_account_payable_id" value={formData.property_account_payable_id || ''} onChange={handleChange} className="w-full">
+                  <option value="">-- Seleccionar Cuenta --</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>)}
+                </select>
               </div>
             </div>
           </div>
