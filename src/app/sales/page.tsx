@@ -102,7 +102,7 @@ export default function SalesPage() {
   // Tabs y Retencion
   const [activeTab, setActiveTab] = useState<'lines' | 'withholding'>('lines');
   const [withholding, setWithholding] = useState<ReceivedWithholding | null>(null);
-  const [whForm, setWhForm] = useState({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0 });
+  const [whForm, setWhForm] = useState({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0, lines: [] as any[] });
 
   const isEditable = docState === 'draft' || !currentId;
 
@@ -175,7 +175,7 @@ export default function SalesPage() {
     setLines([emptyLine()]);
     setActiveTab('lines');
     setWithholding(null);
-    setWhForm({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0 });
+    setWhForm({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0, lines: [] });
     setMode('form');
   }
 
@@ -214,9 +214,9 @@ export default function SalesPage() {
       setWithholding(wh);
       setActiveTab('lines');
       if (wh) {
-        setWhForm({ ret_number: wh.ret_number || '', ret_auth: wh.ret_auth || '', base_renta: wh.base_renta || 0, porcentaje_renta: wh.porcentaje_renta || 0, valor_ret_renta: wh.valor_ret_renta || 0, base_iva: wh.base_iva || 0, porcentaje_iva: wh.porcentaje_iva || 0, valor_ret_iva: wh.valor_ret_iva || 0 });
+        setWhForm({ ret_number: wh.ret_number || '', ret_auth: wh.ret_auth || '', base_renta: wh.base_renta || 0, porcentaje_renta: wh.porcentaje_renta || 0, valor_ret_renta: wh.valor_ret_renta || 0, base_iva: wh.base_iva || 0, porcentaje_iva: wh.porcentaje_iva || 0, valor_ret_iva: wh.valor_ret_iva || 0, lines: wh.lines || [] });
       } else {
-        setWhForm({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0 });
+        setWhForm({ ret_number: '', ret_auth: '', base_renta: 0, porcentaje_renta: 0, valor_ret_renta: 0, base_iva: 0, porcentaje_iva: 0, valor_ret_iva: 0, lines: [] });
       }
       
       setMode('form');
@@ -428,19 +428,29 @@ export default function SalesPage() {
 
         let base_renta = 0, porcentaje_renta = 0, valor_ret_renta = 0;
         let base_iva = 0, porcentaje_iva = 0, valor_ret_iva = 0;
+        const extractedLines: any[] = [];
 
         const impuestos = doc.querySelectorAll('impuestos > impuesto');
         impuestos.forEach(imp => {
           const cod = imp.querySelector('codigo')?.textContent;
+          const codRet = imp.querySelector('codigoRetencion')?.textContent;
           const base = parseFloat(imp.querySelector('baseImponible')?.textContent || '0');
           const pct = parseFloat(imp.querySelector('porcentajeRetener')?.textContent || '0');
           const val = parseFloat(imp.querySelector('valorRetenido')?.textContent || '0');
           
+          extractedLines.push({
+            tax_type: parseInt(cod || '0'),
+            retention_code: codRet || '',
+            base_amount: base,
+            retention_percent: pct,
+            retention_amount: val
+          });
+
           if (cod === '1') { base_renta += base; porcentaje_renta = pct; valor_ret_renta += val; } // Renta
           if (cod === '2') { base_iva += base; porcentaje_iva = pct; valor_ret_iva += val; } // IVA
         });
 
-        setWhForm({ ret_number, ret_auth, base_renta, porcentaje_renta, valor_ret_renta, base_iva, porcentaje_iva, valor_ret_iva });
+        setWhForm({ ret_number, ret_auth, base_renta, porcentaje_renta, valor_ret_renta, base_iva, porcentaje_iva, valor_ret_iva, lines: extractedLines });
       } catch (err: any) {
         alert('Error leyendo XML: ' + err.message);
       }
@@ -467,7 +477,8 @@ export default function SalesPage() {
         porcentaje_renta: whForm.porcentaje_renta,
         porcentaje_iva: whForm.porcentaje_iva,
         valor_ret_renta: whForm.valor_ret_renta,
-        valor_ret_iva: whForm.valor_ret_iva
+        valor_ret_iva: whForm.valor_ret_iva,
+        lines: whForm.lines
       });
       alert('Retención guardada.');
       handleOpen(currentId);
@@ -786,10 +797,37 @@ export default function SalesPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
                       <div><label style={C.label}>No. Retención</label><input style={C.inputRO} value={withholding.ret_number || '-'} readOnly /></div>
                       <div><label style={C.label}>Autorización</label><input style={C.inputRO} value={withholding.ret_auth || '-'} readOnly /></div>
-                      <div><label style={C.label}>Retención IR</label><input style={C.inputRO} value={fmt(withholding.valor_ret_renta)} readOnly /></div>
-                      <div><label style={C.label}>Retención IVA</label><input style={C.inputRO} value={fmt(withholding.valor_ret_iva)} readOnly /></div>
+                      <div><label style={C.label}>Retención IR (Total)</label><input style={C.inputRO} value={fmt(withholding.valor_ret_renta)} readOnly /></div>
+                      <div><label style={C.label}>Retención IVA (Total)</label><input style={C.inputRO} value={fmt(withholding.valor_ret_iva)} readOnly /></div>
                       <div><label style={C.label}>Estado Contable</label><div style={{ fontSize: '12px', fontWeight: 600, color: withholding.account_move_id ? '#16a34a' : '#ea580c' }}>{withholding.account_move_id ? `Contabilizado (MOVE-${withholding.account_move_id})` : 'Pendiente de Contabilizar'}</div></div>
                     </div>
+                    {withholding.lines && withholding.lines.length > 0 && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <h4 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem', color: '#334155' }}>Detalle de Líneas de Retención</h4>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                          <thead>
+                            <tr style={{ background: '#f1f5f9' }}>
+                              <th style={{ ...C.th, width: '60px' }}>Tipo</th>
+                              <th style={{ ...C.th, width: '80px' }}>Código SRI</th>
+                              <th style={C.thR}>Base Imponible</th>
+                              <th style={C.thR}>% Retención</th>
+                              <th style={C.thR}>Valor Retenido</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {withholding.lines.map((l: any, i: number) => (
+                              <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={C.td}>{l.tax_type === 1 ? 'RENTA' : l.tax_type === 2 ? 'IVA' : l.tax_type === 6 ? 'ISD' : 'OTRO'}</td>
+                                <td style={C.td}>{l.retention_code}</td>
+                                <td style={C.tdR}>{fmt(l.base_amount)}</td>
+                                <td style={C.tdR}>{fmt(l.retention_percent)}%</td>
+                                <td style={C.tdR}>{fmt(l.retention_amount)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                     {!withholding.account_move_id && (
                       <button style={{ ...C.btnPrimary, width: 'auto', padding: '8px 16px' }} onClick={handleContabilizarWithholding}>Contabilizar la Retención</button>
                     )}
@@ -807,6 +845,35 @@ export default function SalesPage() {
                       <div><label style={C.label}>No. Retención *</label><input style={C.input} value={whForm.ret_number} onChange={e => setWhForm({...whForm, ret_number: e.target.value})} placeholder="001-001-123456789" /></div>
                       <div><label style={C.label}>Autorización *</label><input style={C.input} value={whForm.ret_auth} onChange={e => setWhForm({...whForm, ret_auth: e.target.value})} /></div>
                     </div>
+                    
+                    {whForm.lines && whForm.lines.length > 0 && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <h4 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem', color: '#334155' }}>Detalle de Retención (Extraído del XML)</h4>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                          <thead>
+                            <tr style={{ background: '#f1f5f9' }}>
+                              <th style={{ ...C.th, width: '60px' }}>Tipo</th>
+                              <th style={{ ...C.th, width: '80px' }}>Código SRI</th>
+                              <th style={C.thR}>Base Imponible</th>
+                              <th style={C.thR}>% Retención</th>
+                              <th style={C.thR}>Valor Retenido</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {whForm.lines.map((l: any, i: number) => (
+                              <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                <td style={C.td}>{l.tax_type === 1 ? 'RENTA' : l.tax_type === 2 ? 'IVA' : l.tax_type === 6 ? 'ISD' : 'OTRO'}</td>
+                                <td style={C.td}>{l.retention_code}</td>
+                                <td style={C.tdR}>{fmt(l.base_amount)}</td>
+                                <td style={C.tdR}>{fmt(l.retention_percent)}%</td>
+                                <td style={C.tdR}>{fmt(l.retention_amount)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '6px' }}>
                       <div><label style={C.label}>Base Imponible Renta</label><input style={C.input} type="number" step="0.01" value={whForm.base_renta} onChange={e => setWhForm({...whForm, base_renta: parseFloat(e.target.value)||0})} /></div>
                       <div><label style={C.label}>% Renta</label><input style={C.input} type="number" step="0.01" value={whForm.porcentaje_renta} onChange={e => setWhForm({...whForm, porcentaje_renta: parseFloat(e.target.value)||0})} /></div>

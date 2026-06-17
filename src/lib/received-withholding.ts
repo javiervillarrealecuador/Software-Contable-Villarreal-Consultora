@@ -9,6 +9,16 @@
 
 import { supabase } from './supabase';
 
+export interface ReceivedWithholdingLine {
+  id?: number;
+  withholding_id?: number;
+  tax_type: number; // 1=Renta, 2=IVA, 6=ISD
+  retention_code: string;
+  base_amount: number;
+  retention_percent: number;
+  retention_amount: number;
+}
+
 export interface ReceivedWithholding {
   id: number;
   company_id: number;
@@ -29,6 +39,7 @@ export interface ReceivedWithholding {
   created_at: string;
   partner?: { id: number; name: string; vat: string };
   sale?: { id: number; name: string; invoice_ref: string | null };
+  lines?: ReceivedWithholdingLine[];
 }
 
 export async function getReceivedWithholdings(companyId: number): Promise<ReceivedWithholding[]> {
@@ -37,7 +48,8 @@ export async function getReceivedWithholdings(companyId: number): Promise<Receiv
     .select(`
       *,
       partner:res_partner(id, name, vat),
-      sale:sale_order(id, name, invoice_ref)
+      sale:sale_order(id, name, invoice_ref),
+      lines:sale_received_withholding_line(*)
     `)
     .eq('company_id', companyId)
     .order('date', { ascending: false });
@@ -48,7 +60,7 @@ export async function getReceivedWithholdings(companyId: number): Promise<Receiv
 export async function getWithholdingForSale(saleId: number): Promise<ReceivedWithholding | null> {
   const { data, error } = await supabase
     .from('sale_received_withholding')
-    .select('*')
+    .select('*, lines:sale_received_withholding_line(*)')
     .eq('sale_order_id', saleId)
     .eq('state', 'registered')
     .maybeSingle();
@@ -70,14 +82,25 @@ export async function createReceivedWithholding(input: {
   valor_ret_renta?: number;
   valor_ret_iva?: number;
   notes?: string | null;
+  lines?: ReceivedWithholdingLine[];
 }): Promise<ReceivedWithholding> {
-  const { data, error } = await supabase
+  const { lines, ...headerInput } = input;
+  const { data: header, error: headerError } = await supabase
     .from('sale_received_withholding')
-    .insert([{ ...input, state: 'registered' }])
+    .insert([{ ...headerInput, state: 'registered' }])
     .select(`*, partner:res_partner(id, name, vat)`)
     .single();
-  if (error) throw error;
-  return data as ReceivedWithholding;
+  if (headerError) throw headerError;
+  
+  if (lines && lines.length > 0) {
+    const linesToInsert = lines.map(l => ({ ...l, withholding_id: header.id }));
+    const { error: linesError } = await supabase
+      .from('sale_received_withholding_line')
+      .insert(linesToInsert);
+    if (linesError) throw linesError;
+  }
+  
+  return header as ReceivedWithholding;
 }
 
 export async function cancelReceivedWithholding(id: number): Promise<void> {
