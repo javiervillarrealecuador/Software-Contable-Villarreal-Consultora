@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCompanies, getPartners } from '@/lib/supabase';
+import { getCompanies, getPartners, createPartner } from '@/lib/supabase';
 import { createPurchase, PurchaseLine } from '@/lib/purchases';
 import { getProducts, getLocations } from '@/lib/inventory';
 import QuickCreatePartnerModal from '@/components/modals/QuickCreatePartnerModal';
@@ -47,6 +47,7 @@ export default function NewPurchasePage() {
   const [locations, setLocations] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
+  const [activeCompany, setActiveCompany] = useState<any>(null);
 
   // Form State
   const [partnerId, setPartnerId] = useState<number>(0);
@@ -76,6 +77,9 @@ export default function NewPurchasePage() {
     const comps = await getCompanies();
     const compId = comps.length > 0 ? comps[0].id : 1;
     setActiveCompanyId(compId);
+    
+    const activeComp = comps.find((c: any) => c.id === compId) || comps[0];
+    setActiveCompany(activeComp);
 
     const ps = await getPartners(compId);
     setPartners(ps || []);
@@ -153,13 +157,165 @@ export default function NewPurchasePage() {
     }
   }
 
+  const handleUploadXML = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/xml');
+        
+        // 1. Validar que tenga estructura tributaria
+        const info = doc.querySelector('infoTributaria');
+        if (!info) throw new Error('No se encontró infoTributaria en el XML.');
+
+        // 2. Validar que sea un comprobante de tipo Factura (codDoc = '01')
+        const codDoc = info.querySelector('codDoc')?.textContent?.trim();
+        if (codDoc !== '01') {
+          throw new Error('El comprobante cargado no es una Factura Electrónica (codDoc debe ser 01).');
+        }
+
+        // 3. Validar que esté dirigida a la empresa activa (RUC del comprador)
+        const buyerVat = doc.querySelector('infoFactura > identificacionComprador')?.textContent?.trim();
+        const companyVat = activeCompany?.vat?.trim();
+        if (!buyerVat) {
+          throw new Error('No se encontró la identificación del comprador en el XML.');
+        }
+        if (buyerVat !== companyVat) {
+          throw new Error(`Esta factura está emitida al RUC de comprador ${buyerVat}, el cual no coincide con el RUC de la empresa activa (${companyVat || 'sin configurar'}).`);
+        }
+
+        // 4. Obtener datos del Proveedor y crearlo si no existe
+        const supplierName = info.querySelector('razonSocial')?.textContent?.trim() || doc.querySelector('infoFactura > razonSocialProveedor')?.textContent?.trim() || 'Proveedor Importado';
+        const supplierVat = info.querySelector('ruc')?.textContent?.trim();
+        if (!supplierVat) {
+          throw new Error('No se encontró el RUC del proveedor en el XML.');
+        }
+
+        const foundPartner = partners.find(x => x.vat?.trim() === supplierVat);
+        if (foundPartner) {
+          setPartnerId(foundPartner.id);
+        } else {
+          const confirmCreate = window.confirm(`El proveedor "${supplierName}" con RUC ${supplierVat} no está registrado. ¿Deseas crearlo automáticamente?`);
+          if (!confirmCreate) return;
+
+          try {
+            const newP = await createPartner({
+              company_id: activeCompanyId,
+              name: supplierName,
+              vat: supplierVat,
+              is_supplier: true,
+              is_customer: false,
+              active: true
+            });
+            if (newP) {
+              setPartners(prev => [...prev, newP]);
+              setPartnerId(newP.id);
+            }
+          } catch (err: any) {
+            throw new Error('Error al registrar proveedor: ' + err.message);
+          }
+        }
+
+        // 5. Cargar datos del documento
+        const estab = info.querySelector('estab')?.textContent?.trim() || '001';
+        const ptoEmi = info.querySelector('ptoEmi')?.textContent?.trim() || '001';
+        const sec = info.querySelector('secuencial')?.textContent?.trim() || '';
+        const accessKey = info.querySelector('claveAcceso')?.textContent?.trim() || '';
+        setInvoiceSerie(`${estab}-${ptoEmi}`);
+        setInvoiceNum(sec);
+        setInvoiceAuth(accessKey);
+
+        const dateStr = doc.querySelector('infoFactura > fechaEmision')?.textContent?.trim();
+        if (dateStr) {
+          const parts = dateStr.split('/');
+          if (parts.length === 3) {
+            const formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            setInvoiceDate(formattedDate);
+            setDateOrder(formattedDate);
+            setDueDate(formattedDate);
+          }
+        }
+
+        // 6. Cargar subtotales adicionales (no objeto, exento)
+        let noIva = 0;
+        let exento = 0;
+        const totalsList = doc.querySelectorAll('infoFactura > totalConImpuestos > totalImpuesto');
+        totalsList.forEach(tot => {
+          const cod = tot.querySelector('codigo')?.textContent;
+          const pctCod = tot.querySelector('codigoPorcentaje')?.textContent;
+          const base = parseFloat(tot.querySelector('baseImponible')?.textContent || '0');
+          if (cod === '2') {
+            // IVA - cubierto por líneas
+          } else {
+            if (pctCod === '6') noIva += base;
+            if (pctCod === '7') exento += base;
+          }
+        });
+        setAmountNoIva(noIva);
+        setAmountExentoIva(exento);
+
+        // 7. Cargar líneas de detalles
+        const extractedLines: PurchaseLine[] = [];
+        const details = doc.querySelectorAll('detalles > detalle');
+        details.forEach(det => {
+          const desc = det.querySelector('descripcion')?.textContent?.trim() || 'Detalle Factura';
+          const qty = parseFloat(det.querySelector('cantidad')?.textContent || '1');
+          const price = parseFloat(det.querySelector('precioUnitario')?.textContent || '0');
+          const descAmt = parseFloat(det.querySelector('descuento')?.textContent || '0');
+          
+          const subtotal = qty * price;
+          const discPct = subtotal > 0 ? (descAmt / subtotal) * 100 : 0;
+          
+          let iva_rate = 15;
+          const imp = det.querySelector('impuestos > impuesto');
+          if (imp) {
+            const cod = imp.querySelector('codigo')?.textContent;
+            const pctCod = imp.querySelector('codigoPorcentaje')?.textContent;
+            if (cod === '2') {
+              if (pctCod === '0') iva_rate = 0;
+              else if (pctCod === '5') iva_rate = 5;
+              else if (pctCod === '2') iva_rate = 12;
+              else if (pctCod === '4') iva_rate = 15;
+            }
+          }
+          
+          extractedLines.push({
+            product_id: null,
+            description: desc,
+            quantity: qty,
+            price_unit: price,
+            discount: Math.round(discPct * 100) / 100,
+            iva_rate,
+            location_id: null
+          });
+        });
+
+        if (extractedLines.length > 0) {
+          setLines(extractedLines);
+        }
+        alert('Factura cargada correctamente desde el XML.');
+      } catch (err: any) {
+        alert('Error leyendo XML: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   return (
     <div style={S.page}>
       <header style={S.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <h1 style={{ fontSize: '1.2rem', margin: 0, color: '#1e293b' }}>Factura Compra</h1>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <label style={{ ...S.btnOutline, display: 'inline-flex', alignItems: 'center', gap: '0.4rem', margin: 0, cursor: 'pointer', backgroundColor: '#eff6ff', borderColor: '#bfdbfe', color: '#1d4ed8' }}>
+            📄 Cargar XML
+            <input type="file" accept=".xml" style={{ display: 'none' }} onChange={handleUploadXML} />
+          </label>
           <button style={S.btnOutline} onClick={() => router.push('/purchases')}>Cerrar</button>
           <button style={S.btn} onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
         </div>
